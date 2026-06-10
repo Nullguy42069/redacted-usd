@@ -1,0 +1,16 @@
+node_modules
+.next
+dist
+.turbo
+*.log
+.env
+.env.local
+.DS_Store
+
+# --- appended by pre-audit baseline ---
+target/
+.data/
+apps/web/.data/
+*.zip
+.turbo/
+private_vote/

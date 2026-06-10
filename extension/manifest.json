@@ -1,0 +1,88 @@
+{
+  "manifest_version": 3,
+  "name": "Redacted Multisig",
+  "version": "0.1.0",
+  "description": "Connect any Solana dApp to your Redacted vault. Transactions route to your multisig for approval.",
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": [
+        "http://localhost:3000/*",
+        "https://redacted-usd.xyz/*",
+        "https://*.redacted-usd.xyz/*",
+        "https://redacted-usd.com/*",
+        "https://*.redacted-usd.com/*",
+        "https://redacted-usd.pro/*",
+        "https://*.redacted-usd.pro/*"
+      ],
+      "js": ["wallet-provider.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": [
+        "http://localhost:3000/*",
+        "https://redacted-usd.xyz/*",
+        "https://*.redacted-usd.xyz/*",
+        "https://redacted-usd.com/*",
+        "https://*.redacted-usd.com/*",
+        "https://redacted-usd.pro/*",
+        "https://*.redacted-usd.pro/*"
+      ],
+      "js": ["content-bridge.js"],
+      "run_at": "document_start",
+      "world": "ISOLATED",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "https://redacted-usd.xyz/*",
+        "https://*.redacted-usd.xyz/*",
+        "https://redacted-usd.com/*",
+        "https://*.redacted-usd.com/*",
+        "https://redacted-usd.pro/*",
+        "https://*.redacted-usd.pro/*"
+      ],
+      "js": ["main-redacted.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "https://redacted-usd.xyz/*",
+        "https://*.redacted-usd.xyz/*",
+        "https://redacted-usd.com/*",
+        "https://*.redacted-usd.com/*",
+        "https://redacted-usd.pro/*",
+        "https://*.redacted-usd.pro/*"
+      ],
+      "js": ["content-redacted.js"],
+      "run_at": "document_start",
+      "world": "ISOLATED",
+      "all_frames": false
+    }
+  ]
+}
