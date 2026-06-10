@@ -24,6 +24,7 @@ import { getAggregator } from "@/lib/aggregator";
 import { useMultisig } from "./MultisigContext";
 import { addVault } from "@/lib/vault-store";
 import { getDefaultBackendId, setBackendIdFor } from "@/lib/privacy-prefs";
+import { invalidateAll } from "@/lib/rpc-cache";
 import Link from "next/link";
 
 type Props = { open: boolean; onClose: () => void };
@@ -187,6 +188,9 @@ export function CreateVaultDialog({ open, onClose }: Props) {
         // after refresh/navigation (it was only being set as the active context
         // before, but not persisted to the user's local vault list).
         addVault({ address: addr, bookmarked: true, readOnly: false });
+        // A new vault was created — clear ALL cached state so the discovery /
+        // assets / proposal queries refetch fresh against the new account.
+        invalidateAll();
         // Persist the chosen voting backend for this brand-new vault so the
         // Approve flow downstream knows to route through it (e.g. TEE).
         try {

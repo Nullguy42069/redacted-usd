@@ -16,6 +16,7 @@ import {
   loadMultisig,
   shortAddress,
 } from "@/lib/squads";
+import { invalidateAfterTx } from "@/lib/rpc-cache";
 
 type Mode = "add" | "remove" | "threshold";
 
@@ -179,6 +180,10 @@ export function ManageSignersDialog({ open, onClose }: { open: boolean; onClose:
 
       const sig = await sendTransaction(built.tx, connection, { maxRetries: 3 });
       await confirmWithExtendedTimeout(connection, sig);
+      // Signer/threshold change just landed — invalidate cached multisig state
+      // so UI reflects the new member set immediately. Without this, the cache
+      // would show stale member counts for up to 15s (Fable 5 audit 2026-06-10).
+      invalidateAfterTx(multisig.vault);
       // The tx's proposalApprove ix counts the creator's vote. If threshold=1,
       // the proposal is now in "Approved" status and can execute.
       setSuccess({ sig, index: built.transactionIndex, autoApproved: multisig.threshold === 1 });
@@ -197,6 +202,7 @@ export function ManageSignersDialog({ open, onClose }: { open: boolean; onClose:
       const execTx = await buildExecute(connection, multisig.address, success.index, connectedMember);
       const sig = await sendTransaction(execTx, connection, { maxRetries: 3 });
       await confirmWithExtendedTimeout(connection, sig);
+      invalidateAfterTx(multisig.vault);
       setExecuted(true);
       refresh();
     } catch (e: any) {

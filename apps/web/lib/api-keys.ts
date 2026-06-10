@@ -72,7 +72,6 @@ export function listApiKeys(): Omit<ApiKeyRecord, 'key'>[] {
   return loadKeys().map(({ key, ...rest }) => rest);
 }
 
-// For now we expose a way to list keys with their values (only for the owner in UI)
-export function listApiKeysForUI(): ApiKeyRecord[] {
-  return loadKeys();
-}
+// REMOVED 2026-06-10 (security audit): this function returned cleartext key
+// secrets. It is no longer exported. Use listApiKeys() for metadata-only listing.
+// If you need a key value, you must hold it from the one-shot return at creation.

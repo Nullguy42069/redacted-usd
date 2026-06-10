@@ -35,6 +35,7 @@ import {
 } from "@/lib/user-apps-store";
 import { setupSquadsIframeBridge } from "@/lib/squads-iframe-bridge";
 import { buildProposeTransaction, loadMultisig } from "@/lib/squads";
+import { invalidateAfterTx } from "@/lib/rpc-cache";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 
@@ -319,6 +320,7 @@ function WalletDependentBrowser({ owner, isPersonal = false }: { owner: PublicKe
           });
           const sig = await sendTransaction(tx, connection);
           await connection.confirmTransaction(sig, "confirmed");
+          if (!isPersonal) invalidateAfterTx(owner);
           setLastProposalSignature(sig);
         } catch (e: any) {
           alert("Failed to create proposal: " + e.message);
@@ -387,6 +389,7 @@ function WalletDependentBrowser({ owner, isPersonal = false }: { owner: PublicKe
             });
             const sig = await sendTransaction(tx, connection);
             await connection.confirmTransaction(sig, 'confirmed');
+            if (!isPersonal) invalidateAfterTx(owner);
             alert(`Proposal created from external dApp! Tx: ${sig}. Check the Transactions tab.`);
             setLastProposalSignature(sig);
           } catch (e: any) {

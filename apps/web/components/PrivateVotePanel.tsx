@@ -32,6 +32,7 @@ import {
 } from "@/lib/privateVote";
 import { isTeeVoteWrapped } from "@/lib/teeVote";
 import { getAggregator } from "@/lib/aggregator";
+import { invalidateAfterTx } from "@/lib/rpc-cache";
 import { RoutingDisplay } from "./RoutingDisplay";
 
 type Props = {
@@ -115,6 +116,7 @@ export function PrivateVotePanel({ open, onClose, multisig, transactionIndex, is
       const tx = await buildTx();
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
+      if (multisig) invalidateAfterTx(multisig.vault);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -530,6 +532,7 @@ function VotingPanel({
         async (tx) => {
           const sig = await sendTransaction(tx, connection);
           await connection.confirmTransaction(sig, "confirmed");
+          if (multisig) invalidateAfterTx(multisig.vault);
           return sig;
         },
       );

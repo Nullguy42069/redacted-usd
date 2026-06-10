@@ -8,6 +8,7 @@ import { SwapVert, KeyboardArrowDown, Search, Close, OpenInNew, InfoOutlined } f
 import { useEffect, useMemo, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useMultisig } from "@/components/MultisigContext";
+import { invalidateAfterTx } from "@/lib/rpc-cache";
 import {
   BRIDGE_DESTINATIONS, SOLANA_CHAIN, SOLANA_CHAIN_ID,
   getChain, getTokens,
@@ -173,6 +174,7 @@ export default function BridgePage() {
         });
         const s = await sendTransaction(built.tx, connection);
         await connection.confirmTransaction(s, "confirmed");
+        if (multisig) invalidateAfterTx(multisig.vault);
         setSig(s); refresh();
       }
     } catch (e) {

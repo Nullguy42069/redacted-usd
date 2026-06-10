@@ -8,9 +8,20 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "check:no-fees": "node scripts/check-no-fees.mjs"
+    "check:no-fees": "node scripts/check-no-fees.mjs",
+    "check:audit": "pnpm audit --audit-level high",
+    "check:csp": "node scripts/check-csp.mjs",
+    "check:all": "pnpm check:no-fees && pnpm check:audit && pnpm check:csp"
   },
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "overrides": {
+      "protobufjs": "^7.5.5",
+      "bigint-buffer": "^1.1.6",
+      "elliptic": "^6.6.2",
+      "uuid": "^11.1.1"
+    }
   }
 }

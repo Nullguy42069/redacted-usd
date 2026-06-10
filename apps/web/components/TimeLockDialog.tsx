@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useMultisig } from "@/components/MultisigContext";
 import { buildSetTimeLockProposal, loadMultisig, humanizeSeconds } from "@/lib/squads";
+import { invalidateAfterTx } from "@/lib/rpc-cache";
 
 // Presets that cover the common cases — matches the spirit of Safe's
 // delay-modifier presets (7/14/28/56 days).
@@ -60,6 +61,7 @@ export function TimeLockDialog({ open, onClose }: { open: boolean; onClose: () =
       });
       const sig = await sendTransaction(built.tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
+      invalidateAfterTx(multisig.vault);
       setSuccess({ sig, index: built.transactionIndex });
     } catch (e: any) {
       setError(e?.message ?? String(e));

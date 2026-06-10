@@ -27,6 +27,10 @@ import {
   isQueueStatus,
   loadTransactions,
   shortAddress,
+  decodeTransactionAccount,
+  formatDecodedAction,
+  actionsRequireHardBlock,
+  type DecodedAction,
   type ProposalStatus,
   type TxRow,
 } from "@/lib/squads";
@@ -38,6 +42,9 @@ export default function TransactionsPage() {
   const { multisig, refresh, mode, personalPublicKey } = useMultisig();
   const [tab, setTab] = useState<"queue" | "history">("queue");
   const [rows, setRows] = useState<TxRow[] | null>(null);
+  // Decoded actions per tx index — populated after rows load. Map<indexStr, actions>.
+  // Drives both the human-readable display AND the Approve/Execute hard-block.
+  const [decoded, setDecoded] = useState<Record<string, DecodedAction[] | "loading" | "error">>({});
   const [error, setError] = useState<string | null>(null);
   const [busyIdx, setBusyIdx] = useState<bigint | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
@@ -50,11 +57,31 @@ export default function TransactionsPage() {
     if (mode !== 'vault' || !multisig) return;
     let cancelled = false;
     setRows(null);
+    setDecoded({});
     setError(null);
     (async () => {
       try {
         const r = await loadTransactions(connection, multisig.address, multisig);
-        if (!cancelled) setRows(r);
+        if (cancelled) return;
+        setRows(r);
+        // Decode actions for every queue-eligible row in parallel. Skipping
+        // history (Executed/Cancelled/Rejected) since the user can't act on them.
+        const toDecode = r.filter((row) => isQueueStatus(row.status));
+        for (const row of toDecode) {
+          setDecoded((d) => ({ ...d, [row.index.toString()]: "loading" }));
+        }
+        await Promise.all(
+          toDecode.map(async (row) => {
+            try {
+              const actions = await decodeTransactionAccount(connection, multisig.address, row.index);
+              if (cancelled) return;
+              setDecoded((d) => ({ ...d, [row.index.toString()]: actions }));
+            } catch {
+              if (cancelled) return;
+              setDecoded((d) => ({ ...d, [row.index.toString()]: "error" }));
+            }
+          }),
+        );
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -234,8 +261,17 @@ export default function TransactionsPage() {
           {filtered.map((r) => {
             const approvals = r.approvals.length;
             const needed = m.threshold;
-            const canApprove = r.status === "Active" && youAreSigner && !alreadyVoted(r, publicKey);
-            const canExecute = r.status === "Approved" && youAreSigner;
+            // Decode-before-approve (Fable 5 audit 2026-06-10): never let a user
+            // click Approve/Execute on a tx whose instructions weren't decoded.
+            // Loading state also blocks — don't race the decode.
+            const decodedActions = decoded[r.index.toString()];
+            const decodeReady = Array.isArray(decodedActions);
+            const decodeBlocked =
+              decodedActions === "loading" ||
+              decodedActions === "error" ||
+              (decodeReady && actionsRequireHardBlock(decodedActions));
+            const canApprove = r.status === "Active" && youAreSigner && !alreadyVoted(r, publicKey) && !decodeBlocked;
+            const canExecute = r.status === "Approved" && youAreSigner && !decodeBlocked;
             const canReject = r.status === "Active" && youAreSigner && !alreadyVoted(r, publicKey);
             return (
               <Box
@@ -259,6 +295,42 @@ export default function TransactionsPage() {
                   <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
                     {shortAddress(r.proposalPda, 6, 6)}
                   </Typography>
+                  {/* Decoded action list — the signer must see what they sign. */}
+                  {isQueueStatus(r.status) && (
+                    <Box sx={{ mt: 0.5 }}>
+                      {decodedActions === "loading" && (
+                        <Typography sx={{ fontSize: 12, color: "text.secondary", fontStyle: "italic" }}>
+                          Decoding instructions…
+                        </Typography>
+                      )}
+                      {decodedActions === "error" && (
+                        <Typography sx={{ fontSize: 12, color: "error.main" }}>
+                          🛑 Could not decode this transaction. Approval is disabled.
+                        </Typography>
+                      )}
+                      {decodeReady && (
+                        <Stack spacing={0.25}>
+                          {(decodedActions as DecodedAction[]).map((a, i) => (
+                            <Typography
+                              key={i}
+                              sx={{
+                                fontSize: 13,
+                                color: a.type === "unknown" ? "error.main" : "text.primary",
+                                fontWeight: a.type === "unknown" || a.type === "config" ? 600 : 400,
+                              }}
+                            >
+                              {formatDecodedAction(a)}
+                            </Typography>
+                          ))}
+                          {actionsRequireHardBlock(decodedActions as DecodedAction[]) && (
+                            <Typography sx={{ fontSize: 11, color: "error.main", mt: 0.5 }}>
+                              Approval blocked — this tx contains an instruction this UI cannot fully explain.
+                            </Typography>
+                          )}
+                        </Stack>
+                      )}
+                    </Box>
+                  )}
                   {r.status === "Active" && (
                     <Box sx={{ mt: 1, maxWidth: 260 }}>
                       <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.5 }}>

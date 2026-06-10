@@ -7,6 +7,7 @@ import { ContentCopy, OpenInNew, InfoOutlined, Edit, Delete, GroupAdd } from "@m
 import React, { useMemo, useState } from "react";
 import { useMultisig } from "@/components/MultisigContext";
 import { shortAddress } from "@/lib/squads";
+import { invalidateAfterTx } from "@/lib/rpc-cache";
 import { ManageSignersDialog } from "@/components/ManageSignersDialog";
 import { SpendingLimitDialog } from "@/components/SpendingLimitDialog";
 import { TimeLockDialog } from "@/components/TimeLockDialog";
@@ -996,6 +997,7 @@ function ModulesTab({ onCopy }: { onCopy: (label: string, value: string) => void
       });
       const sig = await sendTransaction(built.tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
+      if (multisig) invalidateAfterTx(multisig.vault);
       setRefreshTick((t) => t + 1);
     } catch (e: any) {
       setRemoveError(e?.message ?? String(e));

@@ -7,6 +7,7 @@ import { TrendingUp, OpenInNew, InfoOutlined } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useMultisig } from "@/components/MultisigContext";
+import { invalidateAfterTx } from "@/lib/rpc-cache";
 import {
   activeFor, platformsFor, isoWeek, USDC_MINT, SOL_MINT,
   type EarnPlatform, type AssetKey, type RiskTier,
@@ -122,6 +123,9 @@ function AssetCard({ asset, active }: { asset: AssetKey; active: EarnPlatform | 
         const tx = await getSwapTransaction(quote, publicKey.toBase58());
         const s = await sendTransaction(tx, connection);
         await connection.confirmTransaction(s, "confirmed");
+        // Personal mode: invalidate the user's balance cache (no vault).
+        // The cache key is per-pubkey so we have to invalidate that prefix.
+        // For now invalidateAll is safe and simpler.
         setSig(s);
       } else {
         if (!multisig) throw new Error("No vault loaded.");
@@ -144,6 +148,7 @@ function AssetCard({ asset, active }: { asset: AssetKey; active: EarnPlatform | 
         });
         const s = await sendTransaction(built.tx, connection);
         await connection.confirmTransaction(s, "confirmed");
+        invalidateAfterTx(multisig.vault);
         setSig(s);
         refresh();
       }

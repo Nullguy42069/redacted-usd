@@ -180,6 +180,244 @@ export function isQueueStatus(s: ProposalStatus): boolean {
   return s === "Draft" || s === "Active" || s === "Approved";
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Decode-before-approve (Fable 5 audit 2026-06-10)
+//
+// The drain chain identified in the audit relies on a multisig UI that shows
+// only "Vault tx" + a memo on the Approve/Execute buttons. The signer never
+// sees what they're authorizing. This decoder turns the on-chain
+// VaultTransaction / ConfigTransaction account back into a human-readable list
+// of actions. The render layer in app/transactions/page.tsx MUST disable the
+// Approve button if any returned action is type:"unknown" — a vault tx whose
+// instructions can't be fully decoded cannot be safely approved.
+// ────────────────────────────────────────────────────────────────────────────
+
+const SYS_PROGRAM_ID = "11111111111111111111111111111111";
+const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+
+export type DecodedAction =
+  | { type: "sol_transfer"; recipient: string; lamports: bigint }
+  | {
+      type: "spl_transfer";
+      programId: string;
+      mint?: string;
+      dest: string;
+      amount: bigint;
+    }
+  | {
+      type: "config";
+      action:
+        | "add_member"
+        | "remove_member"
+        | "change_threshold"
+        | "set_time_lock"
+        | "add_spending_limit"
+        | "remove_spending_limit"
+        | "set_rent_collector"
+        | "other";
+      detail: string;
+    }
+  | { type: "unknown"; programId: string; reason?: string };
+
+function safeBase58(pk: PublicKey | undefined | null): string {
+  try {
+    return pk ? pk.toBase58() : "?";
+  } catch {
+    return "?";
+  }
+}
+
+// VaultTransaction inner messages carry SystemProgram / TokenProgram instructions
+// the vault PDA will execute via CPI. Decode them. Returns one DecodedAction per
+// inner instruction; unknown programs yield {type:"unknown"} which the UI MUST
+// use to hard-block the Approve button.
+export function decodeVaultTransactionInstructions(
+  txAccount: { message: { accountKeys: PublicKey[]; instructions: Array<{ programIdIndex: number; accountIndexes: Uint8Array | number[]; data: Uint8Array }> } },
+): DecodedAction[] {
+  const out: DecodedAction[] = [];
+  const keys = txAccount.message.accountKeys || [];
+  const ixs = txAccount.message.instructions || [];
+
+  for (const ix of ixs) {
+    const programId = keys[ix.programIdIndex];
+    const pid = safeBase58(programId);
+    const accountIdxs = Array.from(ix.accountIndexes || []);
+    const data = ix.data instanceof Uint8Array ? ix.data : new Uint8Array(ix.data);
+
+    if (pid === SYS_PROGRAM_ID) {
+      // System program: discriminator is u32 LE at offset 0.
+      // SystemInstruction::Transfer = 2; lamports = u64 LE at offset 4.
+      if (data.length >= 12) {
+        const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+        const variant = view.getUint32(0, true);
+        if (variant === 2 && accountIdxs[1] != null) {
+          // accountIndexes: [from, to]
+          const recipient = safeBase58(keys[accountIdxs[1] as number]);
+          const lamports = view.getBigUint64(4, true);
+          out.push({ type: "sol_transfer", recipient, lamports });
+          continue;
+        }
+      }
+      out.push({ type: "unknown", programId: pid, reason: "system_non_transfer" });
+      continue;
+    }
+
+    if (pid === TOKEN_PROGRAM_ID || pid === TOKEN_2022_PROGRAM_ID) {
+      // SPL Token instruction discriminator = u8 at offset 0.
+      // Transfer       = 3:  amount=u64 LE @ 1. accounts: [source, dest, authority].
+      // TransferChecked = 12: amount=u64 LE @ 1, decimals=u8 @ 9.
+      //                     accounts: [source, mint, dest, authority].
+      if (data.length >= 9) {
+        const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+        const variant = data[0];
+        if (variant === 3 && accountIdxs[1] != null) {
+          const amount = view.getBigUint64(1, true);
+          const dest = safeBase58(keys[accountIdxs[1] as number]);
+          out.push({ type: "spl_transfer", programId: pid, dest, amount });
+          continue;
+        }
+        if (variant === 12 && accountIdxs[1] != null && accountIdxs[2] != null) {
+          const amount = view.getBigUint64(1, true);
+          const mint = safeBase58(keys[accountIdxs[1] as number]);
+          const dest = safeBase58(keys[accountIdxs[2] as number]);
+          out.push({ type: "spl_transfer", programId: pid, mint, dest, amount });
+          continue;
+        }
+      }
+      out.push({ type: "unknown", programId: pid, reason: "spl_non_transfer" });
+      continue;
+    }
+
+    // Anything else (custom programs, defi protocol calls, etc.) is unknown.
+    // The UI MUST hard-block on this.
+    out.push({ type: "unknown", programId: pid });
+  }
+  return out;
+}
+
+// ConfigTransaction decoding — these are the highest-stakes actions because a
+// blind-approved add_member is a permanent backdoor.
+export function decodeConfigActions(
+  cfgAccount: { actions: Array<any> },
+): DecodedAction[] {
+  const out: DecodedAction[] = [];
+  for (const action of cfgAccount.actions || []) {
+    // The @sqds/multisig SDK encodes ConfigAction as a tagged enum.
+    // Shape: { __kind: 'AddMember', member: { key: PublicKey, permissions: ... } }
+    // Names: AddMember, RemoveMember, ChangeThreshold, SetTimeLock,
+    //        AddSpendingLimit, RemoveSpendingLimit, SetRentCollector.
+    const kind = (action.__kind ?? action.kind ?? "").toString();
+    switch (kind) {
+      case "AddMember": {
+        const key = safeBase58(action.member?.key ?? action.newMember?.key);
+        const mask = action.member?.permissions?.mask ?? action.newMember?.permissions?.mask;
+        out.push({ type: "config", action: "add_member", detail: `${key} (perms=${mask ?? "?"})` });
+        break;
+      }
+      case "RemoveMember": {
+        const key = safeBase58(action.oldMember ?? action.member);
+        out.push({ type: "config", action: "remove_member", detail: key });
+        break;
+      }
+      case "ChangeThreshold": {
+        const t = action.newThreshold ?? action.threshold;
+        out.push({ type: "config", action: "change_threshold", detail: `→ ${t}` });
+        break;
+      }
+      case "SetTimeLock": {
+        const s = action.newTimeLock ?? action.timeLock;
+        out.push({ type: "config", action: "set_time_lock", detail: `${s} sec` });
+        break;
+      }
+      case "AddSpendingLimit": {
+        const sl = safeBase58(action.createKey ?? action.key);
+        out.push({ type: "config", action: "add_spending_limit", detail: sl });
+        break;
+      }
+      case "RemoveSpendingLimit": {
+        const sl = safeBase58(action.spendingLimit ?? action.key);
+        out.push({ type: "config", action: "remove_spending_limit", detail: sl });
+        break;
+      }
+      case "SetRentCollector": {
+        const k = safeBase58(action.newRentCollector ?? action.rentCollector);
+        out.push({ type: "config", action: "set_rent_collector", detail: k });
+        break;
+      }
+      default:
+        out.push({ type: "unknown", programId: "ConfigAction", reason: kind || "unrecognized_config_action" });
+    }
+  }
+  return out;
+}
+
+// Top-level decoder — takes any tx account info and dispatches to the right path.
+// Returns an empty list ONLY for genuine no-op accounts; an unknown account type
+// returns a single {type:"unknown"} so the UI hard-blocks.
+export async function decodeTransactionAccount(
+  conn: Connection,
+  multisigPda: PublicKey,
+  transactionIndex: bigint | number,
+): Promise<DecodedAction[]> {
+  const [txPda] = multisig.getTransactionPda({ multisigPda, index: BigInt(transactionIndex) });
+  const info = await conn.getAccountInfo(txPda);
+  if (!info) return [{ type: "unknown", programId: "?", reason: "tx_account_missing" }];
+  const kind = classifyTxAccount(info.data);
+  try {
+    if (kind === "vault") {
+      const [acct] = VaultTransaction.fromAccountInfo(info);
+      return decodeVaultTransactionInstructions(acct as any);
+    }
+    if (kind === "config") {
+      const [acct] = multisig.accounts.ConfigTransaction.fromAccountInfo(info);
+      return decodeConfigActions(acct as any);
+    }
+    if (kind === "batch") {
+      return [{ type: "unknown", programId: "BatchTransaction", reason: "batch_unsupported_in_decoder" }];
+    }
+    return [{ type: "unknown", programId: "?", reason: "unrecognized_tx_kind" }];
+  } catch (e) {
+    return [{ type: "unknown", programId: "?", reason: `decode_error:${(e as Error)?.message?.slice(0, 60)}` }];
+  }
+}
+
+// Human-readable line per action — used by transactions/page.tsx render.
+export function formatDecodedAction(a: DecodedAction): string {
+  switch (a.type) {
+    case "sol_transfer":
+      return `Send ${Number(a.lamports) / LAMPORTS_PER_SOL} SOL → ${shortAddress(a.recipient)}`;
+    case "spl_transfer":
+      return `Send ${a.amount.toString()} tokens → ${shortAddress(a.dest)}${a.mint ? ` (mint ${shortAddress(a.mint)})` : ""}`;
+    case "config":
+      switch (a.action) {
+        case "add_member":
+          return `Add signer ${a.detail}`;
+        case "remove_member":
+          return `Remove signer ${a.detail}`;
+        case "change_threshold":
+          return `Change threshold ${a.detail}`;
+        case "set_time_lock":
+          return `Set time lock ${a.detail}`;
+        case "add_spending_limit":
+          return `Add spending limit ${a.detail}`;
+        case "remove_spending_limit":
+          return `Remove spending limit ${a.detail}`;
+        case "set_rent_collector":
+          return `Set rent collector ${a.detail}`;
+        default:
+          return `Config: ${a.detail}`;
+      }
+    case "unknown":
+      return `🛑 Unknown program ${shortAddress(a.programId)}${a.reason ? ` (${a.reason})` : ""}`;
+  }
+}
+
+// Used by Approve/Execute buttons: if true, the UI MUST disable the button.
+export function actionsRequireHardBlock(actions: DecodedAction[]): boolean {
+  return actions.length === 0 || actions.some((a) => a.type === "unknown");
+}
+
 export type ProposeSolTransferInput = {
   conn: Connection;
   multisigPda: PublicKey;
@@ -427,9 +665,13 @@ const SPENDING_LIMIT_DISCRIMINATOR = new Uint8Array([10, 201, 27, 160, 218, 195,
 
 // Squads v4 program ID — extracted from the SDK so we don't hard-code the
 // pubkey twice; falls back to the constant if `multisig.PROGRAM_ID` is absent.
+// CORRECTED 2026-06-10 (Fable 5 audit): fallback was previously SQDS4ej65cBF...
+// (one char wrong) which made the spending-limit GPA query silently return zero
+// accounts when the fallback path was taken. Hidden spending limits = attacker-
+// added drain authorization that the UI cannot detect or revoke.
 const SQUADS_PROGRAM_ID = (multisig as any).PROGRAM_ID
   ? new PublicKey((multisig as any).PROGRAM_ID)
-  : new PublicKey("SQDS4ej65cBFjFZ8gNZeFiWNa9HnfwK4MFNJZ8aH4DG");
+  : new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf");
 
 // Fall back to direct getProgramAccountsV2 (Helius pushed legacy gpa off for
 // large datasets). Decodes responses ourselves so we don't depend on the SDK's

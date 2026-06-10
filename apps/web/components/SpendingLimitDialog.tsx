@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useMultisig } from "@/components/MultisigContext";
 import { buildAddSpendingLimitProposal, loadMultisig, shortAddress } from "@/lib/squads";
+import { invalidateAfterTx } from "@/lib/rpc-cache";
 
 // Built-in mint shortcuts. SOL = PublicKey.default (Squads encodes native SOL
 // as the zero pubkey). USDC mainnet is the most common.
@@ -107,6 +108,7 @@ export function SpendingLimitDialog({ open, onClose }: { open: boolean; onClose:
       });
       const sig = await sendTransaction(built.tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
+      invalidateAfterTx(multisig.vault);
       setSuccess({ sig, index: built.transactionIndex });
     } catch (e: any) {
       setError(e?.message ?? String(e));

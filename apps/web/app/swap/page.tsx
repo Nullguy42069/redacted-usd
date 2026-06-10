@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useMultisig } from "@/components/MultisigContext";
+import { invalidateAfterTx } from "@/lib/rpc-cache";
 import {
   SWAP_TOKEN_PRESETS,
   toBaseUnits,
@@ -138,6 +139,7 @@ export default function SwapPage() {
       });
       const s = await sendTransaction(built.tx, connection);
       await connection.confirmTransaction(s, "confirmed");
+      if (multisig) invalidateAfterTx(multisig.vault);
       setSig(s);
       refresh();
     } catch (e) {
