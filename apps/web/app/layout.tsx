@@ -5,7 +5,7 @@ import { Shell } from "@/components/Shell";
 const SITE_URL = "https://redacted-usd.xyz";
 const TITLE = "Redacted USD — Private multisig vaults on Solana";
 const DESCRIPTION =
-  "Non-custodial Squads multisig with optional privacy routing through Arcium MPC and other backends. Open source, self-hostable, no tracking.";
+  "Non-custodial Squads multisig with one-tap private transactions via Light Protocol. Open source, self-hostable, no tracking.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     "Squads",
     "vault",
     "privacy",
-    "Arcium",
+    "Light Protocol",
     "non-custodial",
     "DeFi",
   ],

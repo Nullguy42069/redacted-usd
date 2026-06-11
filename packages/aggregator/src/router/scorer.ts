@@ -76,17 +76,6 @@ function eliminationReason(
     return "backend unhealthy";
   }
 
-  // For vault creation, if the user has set very low privacy weight, they
-  // almost certainly want a normal public Squads multisig, not a privacy-
-  // wrapped one (even if the wrapper is "fast").
-  // Arcium and MagicBlock TEE for setup_multisig are only meaningful when
-  // the user actually wants the private voting layer from day one.
-  if (intent.type === "setup_multisig" && policy.weights.privacy <= 25) {
-    if (meta.id === "arcium" || meta.id === "magicblock-tee") {
-      return "privacy weight too low — user wants a plain public vault (use squads-plain)";
-    }
-  }
-
   return null;
 }
 

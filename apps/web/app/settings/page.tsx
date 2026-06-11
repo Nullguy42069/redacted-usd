@@ -19,8 +19,6 @@ import {
   humanizeSeconds,
   type SpendingLimitView,
 } from "@/lib/squads";
-import { isTeeVoteWrapped } from "@/lib/teeVote";
-import { isPrivateVoteWrapped } from "@/lib/privateVote";
 import { getSigner } from "@/lib/signer-store";
 import { EditSignerDialog } from "@/components/EditSignerDialog";
 import {
@@ -37,16 +35,6 @@ import {
   SQUADS_PROGRAM_ID,
   type EnvOverrideKey,
 } from "@/lib/env";
-import {
-  ACTIVITIES,
-  backendsForActivity,
-  getBackendIdFor,
-  setBackendIdFor,
-  humanizeLatency,
-  humanizeCost,
-  type ActivityDef,
-  type BackendOption,
-} from "@/lib/privacy-prefs";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
@@ -71,14 +59,13 @@ import { useEffect } from "react";
 
 // Mirrors Safe's settings nav with Redacted-specific renames:
 // - Security removed for now (deferred until the on-chain recovery program ships)
-// - "Safe Apps" → "Privacy" (per-activity privacy backend selection — the
-//   Redacted differentiator).
+// Privacy is per-transaction — the Private/Public toggle on Assets + Swap — not a
+// settings tab.
 const TABS = [
   "Setup",
   "Appearance",
   "Notifications",
   "Modules",
-  "Privacy",
   "Data",
   "Environment",
 ] as const;
@@ -151,7 +138,6 @@ export default function SettingsPage() {
       {tab === "Appearance"   && <AppearanceTab />}
       {tab === "Notifications"&& <NotificationsTab onCopy={copy} />}
       {tab === "Modules"      && <ModulesTab onCopy={copy} />}
-      {tab === "Privacy"      && <PrivacyTab />}
       {tab === "Data"         && <DataTab />}
       {tab === "Environment"  && <EnvironmentTab />}
 
@@ -176,14 +162,6 @@ function SetupTab({ onCopy }: { onCopy: (label: string, value: string) => void }
   const nonce = Number(multisig.transactionIndex);
   const programUrl = `https://solscan.io/account/${SQUADS_PROGRAM_ID}`;
   const explorerAddrUrl = (a: string) => `https://solscan.io/account/${a}`;
-  const memberKeys = multisig.members.map((m) => m.pubkey);
-  const teeWrapped = isTeeVoteWrapped(memberKeys, multisig.address);
-  const arciumWrapped = isPrivateVoteWrapped(memberKeys, multisig.address);
-  const votingMode = teeWrapped
-    ? { label: "Encrypted (MagicBlock TEE)", color: "secondary" as const, blurb: "Approvals happen inside an Intel TDX rollup. Vote tallies stay encrypted until threshold; identities of who voted what aren't on chain." }
-    : arciumWrapped
-    ? { label: "Encrypted (Arcium MPC)", color: "primary" as const, blurb: "Approvals happen via MPC across the Cerberus cluster. No single party sees individual votes." }
-    : { label: "Public", color: "default" as const, blurb: "Approvals are standard public votes — every signer's vote is visible on chain." };
 
   const exportSignersCsv = () => {
     const rows = [
@@ -212,13 +190,13 @@ function SetupTab({ onCopy }: { onCopy: (label: string, value: string) => void }
 
       <SectionCard
         title="Voting mode"
-        info="Fixed at vault creation by which backend gated the setup. Change requires creating a new vault."
+        info="How proposal approvals are recorded on chain."
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-          <Chip size="small" label={votingMode.label} color={votingMode.color} variant="outlined" />
+          <Chip size="small" label="Public" color="default" variant="outlined" />
         </Box>
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          {votingMode.blurb}
+          Approvals are standard public votes — every signer&apos;s vote is visible on chain.
         </Typography>
       </SectionCard>
 
@@ -242,7 +220,7 @@ function SetupTab({ onCopy }: { onCopy: (label: string, value: string) => void }
           <Box>
             <Typography sx={{ fontWeight: 600, mb: 0.5 }}>You are on Redacted v1</Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              v1 ships the multisig core. Redacted v2 adds the privacy layer (Arcium encrypted voting, Light Protocol shielded balances, Token-2022 confidential transfers) and will be a different product entirely.
+              v1 ships the multisig core. Redacted v2 adds the privacy layer (Light Protocol shielded balances and transfers) and will be a different product entirely.
             </Typography>
           </Box>
         </Box>
@@ -355,9 +333,9 @@ function SetupTab({ onCopy }: { onCopy: (label: string, value: string) => void }
 }
 
 // ─── Environment tab ────────────────────────────────────────────────────────
-// Lets users override the default Solana RPC, MagicRouter (TEE), and program
-// IDs without rebuilding. Stored in localStorage. Applied on next refresh
-// (module-scope env resolution happens once at import).
+// Lets users override the default Solana RPC and program IDs without
+// rebuilding. Stored in localStorage. Applied on next refresh (module-scope
+// env resolution happens once at import).
 
 const ENV_FIELDS: { key: EnvOverrideKey; label: string; defaultValue: string; placeholder?: string; note?: string }[] = [
   {
@@ -368,32 +346,11 @@ const ENV_FIELDS: { key: EnvOverrideKey; label: string; defaultValue: string; pl
     note: "Default Helius / Triton / QuickNode endpoints all work. Mainnet by default.",
   },
   {
-    key: "magicRouterEndpoint",
-    label: "MagicRouter endpoint (TEE voting)",
-    defaultValue: ENV_DEFAULTS.magicRouterEndpoint,
-    placeholder: "https://devnet.magicblock.app",
-    note: "Routes TEE-encrypted vote txs into the MagicBlock ephemeral rollup. Only matters if your vault uses TEE voting.",
-  },
-  {
     key: "squadsProgramId",
     label: "Multisig program ID",
     defaultValue: ENV_DEFAULTS.squadsProgramId,
     placeholder: "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf",
     note: "Almost always the mainnet v4 program. Only change if you are testing against a custom multisig deployment.",
-  },
-  {
-    key: "privateVoteTeeProgramId",
-    label: "Private vote TEE program ID",
-    defaultValue: ENV_DEFAULTS.privateVoteTeeProgramId,
-    placeholder: "(empty = use IDL default)",
-    note: "Override only if you have deployed your own private_vote_tee program.",
-  },
-  {
-    key: "privateVoteProgramId",
-    label: "Private vote (Arcium) program ID",
-    defaultValue: ENV_DEFAULTS.privateVoteProgramId,
-    placeholder: "(empty = use IDL default)",
-    note: "Override only if you have deployed your own Arcium-gated private_vote program.",
   },
 ];
 
@@ -498,7 +455,6 @@ function EnvironmentTab() {
       <SectionCard title="Currently in use" info="Resolved values this page is running with. If you save changes above, refresh to see these update.">
         <Stack spacing={1}>
           <ActiveRow label="Solana RPC" value={ENV_DEFAULTS.rpcUrl} mask />
-          <ActiveRow label="MagicRouter" value={ENV_DEFAULTS.magicRouterEndpoint} mask />
           <ActiveRow label="Multisig program" value={SQUADS_PROGRAM_ID} />
         </Stack>
         <Typography variant="caption" sx={{ display: "block", mt: 1, color: "text.secondary" }}>
@@ -737,222 +693,12 @@ function ExportRow({ label, count }: { label: string; count: number }) {
   );
 }
 
-// ─── Privacy tab ────────────────────────────────────────────────────────────
-// Per-vault per-activity privacy backend selection. The Redacted thesis:
-// transfers want max privacy, perps want max speed, voting wants max privacy,
-// etc. Saved in localStorage v1 — the privacy router (when it ships) will
-// consume these prefs to pick a backend per intent.
-
-function PrivacyTab() {
-  const { multisig } = useMultisig();
-  const [savedToast, setSavedToast] = useState<string | null>(null);
-  if (!multisig) return null;
-  const vaultKey = multisig.address.toBase58();
-
-  return (
-    <Stack spacing={2}>
-      {/* v1 banner: prefs are saved now and activate when the privacy layer ships */}
-      <Box
-        sx={{
-          p: 2, borderRadius: 1, display: "flex", gap: 1.5,
-          bgcolor: "rgba(34,211,238,0.06)",
-          border: "1px solid rgba(34,211,238,0.20)",
-        }}
-      >
-        <InfoOutlined sx={{ color: "secondary.main", flexShrink: 0, mt: 0.25 }} />
-        <Box>
-          <Typography sx={{ fontWeight: 600, mb: 0.5 }}>Privacy preferences save automatically</Typography>
-          <Typography variant="body2" sx={{ color: "text.secondary" }}>
-            Click any backend to switch. There&apos;s no Apply button — your pick is stored immediately. v1 stores these per-vault. When the privacy router fully ships in v2, every transaction Redacted creates will read these preferences and route through the backend you picked for that activity.
-          </Typography>
-        </Box>
-      </Box>
-
-      {ACTIVITIES.map((a) => (
-        <ActivitySection
-          key={a.key}
-          activity={a}
-          vaultKey={vaultKey}
-          onSaved={(name) => setSavedToast(name)}
-        />
-      ))}
-
-      <Snackbar
-        open={savedToast !== null}
-        autoHideDuration={1800}
-        onClose={() => setSavedToast(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        message={`✓ Saved: ${savedToast ?? ""}`}
-      />
-    </Stack>
-  );
-}
-
-function ActivitySection({
-  activity,
-  vaultKey,
-  onSaved,
-}: {
-  activity: ActivityDef;
-  vaultKey: string;
-  onSaved: (displayName: string) => void;
-}) {
-  const candidates = useMemo(() => backendsForActivity(activity), [activity]);
-  const [selectedId, setSelectedId] = useState<string>(() => getBackendIdFor(vaultKey, activity.key));
-  const selected = candidates.find((c) => c.id === selectedId);
-
-  const onPick = (id: string) => {
-    if (id === selectedId) return;
-    setBackendIdFor(vaultKey, activity.key, id);
-    setSelectedId(id);
-    const name = candidates.find((c) => c.id === id)?.displayName ?? id;
-    onSaved(`${activity.title} → ${name}`);
-  };
-
-  return (
-    <SectionCard
-      title={activity.title}
-      info={`${activity.priority}-priority by default. Picks affect how Redacted routes this activity once the privacy layer is live.`}
-    >
-      <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
-        {activity.blurb}
-      </Typography>
-
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-        <Chip
-          size="small"
-          label={`Priority: ${activity.priority}`}
-          variant="outlined"
-          color={activity.priority === "Privacy" ? "primary" : activity.priority === "Speed" ? "secondary" : "default"}
-        />
-        {selected && (
-          <Chip size="small" label={`Now: ${selected.displayName}`} variant="outlined" />
-        )}
-      </Box>
-
-      <Stack spacing={1}>
-        {candidates.map((b) => (
-          <BackendRow
-            key={b.id}
-            b={b}
-            selected={b.id === selectedId}
-            onPick={() => onPick(b.id)}
-          />
-        ))}
-        {candidates.length === 0 && (
-          <Typography variant="body2" sx={{ color: "text.secondary", fontStyle: "italic" }}>
-            No compatible backends in the registry yet for this activity.
-          </Typography>
-        )}
-      </Stack>
-    </SectionCard>
-  );
-}
-
-function BackendRow({ b, selected, onPick }: { b: BackendOption; selected: boolean; onPick: () => void }) {
-  const isActive = b.selectionStatus === "active";
-  return (
-    <Box
-      onClick={onPick}
-      sx={{
-        cursor: "pointer",
-        p: 1.5, borderRadius: 1,
-        bgcolor: selected ? "rgba(124,58,237,0.10)" : "rgba(255,255,255,0.025)",
-        border: "1px solid",
-        borderColor: selected ? "primary.main" : "rgba(255,255,255,0.05)",
-        transition: "all 0.15s",
-        "&:hover": { borderColor: selected ? "primary.main" : "rgba(255,255,255,0.20)" },
-      }}
-    >
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography sx={{ fontWeight: 600 }}>{b.displayName}</Typography>
-          {!isActive && (
-            <Chip
-              size="small"
-              label={b.selectionStatus === "monitor" ? "Monitoring" : "Deprecated"}
-              variant="outlined"
-              sx={{ height: 18, fontSize: 10 }}
-            />
-          )}
-          {b.network !== "mainnet" && (
-            <Chip
-              size="small"
-              label={b.network}
-              variant="outlined"
-              color="warning"
-              sx={{ height: 18, fontSize: 10 }}
-            />
-          )}
-        </Box>
-        {selected && (
-          <Chip size="small" color="primary" label="Selected" />
-        )}
-      </Box>
-
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mb: 1 }}>
-        <ScoreBar score={b.privacyScore} />
-        <MetaPill label="Latency" value={humanizeLatency(b.baselineLatencyMs)} />
-        <MetaPill label="Cost" value={humanizeCost(b.baselineCostLamports)} />
-        <MetaPill label="Trust" value={b.trustModel.toUpperCase()} />
-        <MetaPill label="Audit" value={b.auditStatus} />
-      </Box>
-
-      {b.trustNotes.length > 0 && (
-        <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
-          {b.trustNotes[0]}
-        </Typography>
-      )}
-    </Box>
-  );
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const color = score >= 70 ? "#22D3EE" : score >= 40 ? "#7C3AED" : "#666";
-  return (
-    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
-      <Box
-        sx={{
-          width: 60, height: 6, borderRadius: 3,
-          bgcolor: "rgba(255,255,255,0.08)", overflow: "hidden", position: "relative",
-        }}
-      >
-        <Box
-          sx={{
-            position: "absolute", left: 0, top: 0, bottom: 0,
-            width: `${Math.max(2, score)}%`, bgcolor: color,
-          }}
-        />
-      </Box>
-      <Typography variant="caption" sx={{ color: "text.secondary", minWidth: 80 }}>
-        Privacy {score}/100
-      </Typography>
-    </Box>
-  );
-}
-
-function MetaPill({ label, value }: { label: string; value: string }) {
-  return (
-    <Box
-      sx={{
-        display: "inline-flex", alignItems: "center", gap: 0.5,
-        px: 1, py: 0.25, borderRadius: 0.5,
-        bgcolor: "rgba(255,255,255,0.04)",
-        fontSize: 11,
-      }}
-    >
-      <Box component="span" sx={{ color: "text.secondary" }}>{label}:</Box>
-      <Box component="span" sx={{ fontFamily: "monospace", fontWeight: 500 }}>{value}</Box>
-    </Box>
-  );
-}
-
 // ─── Modules tab ────────────────────────────────────────────────────────────
 // Solana analog of Safe's Modules + Guards + Fallback handler tab. Sections:
 //   1. Spending limits  — Squads-native bounded delegation
 //   2. Time lock        — global delay on all proposals
 //   3. Program modules  — external programs added as multisig members
-//                         (placeholder until Recovery/Arcium/Light ship)
+//                         (placeholder until the Recovery program ships)
 
 function ModulesTab({ onCopy }: { onCopy: (label: string, value: string) => void }) {
   const { multisig } = useMultisig();
@@ -1074,7 +820,7 @@ function ModulesTab({ onCopy }: { onCopy: (label: string, value: string) => void
         >
           <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>None installed</Typography>
           <Typography variant="caption">
-            Recovery (timelocked owner-change), Arcium encrypted voting, Light shielded balances, and Token-2022 confidential transfers will appear here as separate program modules in v2.
+            Recovery (timelocked owner-change) and Light Protocol shielded balances will appear here as separate program modules in v2.
           </Typography>
         </Box>
       </SectionCard>

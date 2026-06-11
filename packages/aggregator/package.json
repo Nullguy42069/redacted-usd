@@ -10,10 +10,8 @@
   },
   "dependencies": {
     "@anchor-lang/core": "^1.0.2",
-    "@arcium-hq/client": "^0.10.4",
     "@lightprotocol/compressed-token": "^0.23.3",
     "@lightprotocol/stateless.js": "^0.23.3",
-    "@magicblock-labs/ephemeral-rollups-sdk": "^0.14.4",
     "@solana/web3.js": "^1.98.4",
     "@sqds/multisig": "^2.1.4",
     "bn.js": "^5.2.1"

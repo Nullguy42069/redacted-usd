@@ -5,7 +5,7 @@
 
 import { REGISTRY } from "@redacted-usd/aggregator";
 
-export type ActivityKey = "transfers" | "voting" | "dapp" | "compute";
+export type ActivityKey = "transfers" | "swap";
 
 export type ActivityDef = {
   key: ActivityKey;
@@ -21,12 +21,10 @@ export type ActivityDef = {
   priority: "Privacy" | "Speed" | "Balanced";
 };
 
-// Defaults pinned to squads-plain (Public vault, no privacy) across the board
-// until the privacy-wrapped backends (Arcium, Light, Magicblock TEE,
-// Token-2022 confidential) are fully deployed on mainnet. Their off-chain
-// MPC/TEE/proof systems aren't live yet, so picking them as defaults causes
-// stuck transactions and bricked vaults. Users can still opt in per-activity
-// from Settings → Privacy once they understand the trade-off.
+// Defaults pinned to squads-plain (Public vault, no privacy) across the board.
+// Light Protocol is the privacy candidate for transfers/swaps; the public route
+// stays the safe default until Light's shield path is verified end-to-end.
+// Privacy is chosen per-transaction via the Private/Public toggle (Assets + Swap).
 export const ACTIVITIES: ActivityDef[] = [
   {
     key: "transfers",
@@ -37,28 +35,12 @@ export const ACTIVITIES: ActivityDef[] = [
     priority: "Privacy",
   },
   {
-    key: "voting",
-    title: "Voting on proposals",
-    blurb: "Casting approvals on multisig proposals. Encrypted voting prevents vote-buying, frontrunning, and last-minute coercion.",
-    intents: ["vote", "create_vote", "finalize_vote"],
+    key: "swap",
+    title: "Shielded swaps",
+    blurb: "Swapping one token for another while hiding the amounts. Shield-swap = swap + confidential settlement in one flow.",
+    intents: ["transfer", "vault_transfer"],
     defaultBackendId: "squads-plain",
-    priority: "Privacy",
-  },
-  {
-    key: "dapp",
-    title: "dApp activity (swaps, perps, lending)",
-    blurb: "Jupiter, Drift, Pacifica, Kamino, Marginfi. Block-time fills usually matter more than amount privacy here — speed-first is the typical pick.",
-    intents: ["vault_transfer"],
-    defaultBackendId: "squads-plain",
-    priority: "Speed",
-  },
-  {
-    key: "compute",
-    title: "Compute & sealed-bid auctions",
-    blurb: "Encrypted computation on private inputs — sealed-bid auctions, hidden order matching, MPC-style aggregation. Arcium-domain today.",
-    intents: ["compute", "auction"],
-    defaultBackendId: "squads-plain",
-    priority: "Privacy",
+    priority: "Balanced",
   },
 ];
 

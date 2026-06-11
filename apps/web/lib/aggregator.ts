@@ -15,17 +15,15 @@ let cachedConn: Connection | null = null;
 export async function getAggregator(conn: Connection): Promise<PrivacyAggregator> {
   if (cached && cachedConn === conn) return cached;
 
-  // Dynamic import keeps @sqds/multisig, arcium client, etc. out of the server bundle.
+  // Dynamic import keeps @sqds/multisig and the Light client out of the server bundle.
   const mod = await import("@redacted-usd/aggregator");
 
   cached = new mod.PrivacyAggregator({
     conn,
     backends: [
-      new mod.ArciumBackend(),
-      new mod.MagicBlockTeeBackend(),
+      // Asset shielding → Light Protocol. Public fallback → Squads.
       new mod.LightProtocolBackend(),
       new mod.SquadsPlainBackend(),
-      new mod.Token2022ConfidentialBackend(),
     ],
   });
 

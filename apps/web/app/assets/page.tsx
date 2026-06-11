@@ -22,6 +22,7 @@ import { loadAssets, totalUsd, type AssetRow } from "@/lib/assets";
 import { getDeFiPositionApps, type DefiApp } from "@/lib/defi-apps";
 import { fetchDeFiPositions } from "@/lib/defi-positions/fetch";
 import { DeFiPosition } from "@/lib/defi-positions/types";
+import PrivacyModeControl from "@/components/PrivacyModeControl";
 
 export default function AssetsPage() {
   const { connection } = useConnection();
@@ -29,6 +30,9 @@ export default function AssetsPage() {
   const [rows, setRows] = useState<AssetRow[] | null>(null);
   const [defiPositions, setDefiPositions] = useState<DeFiPosition[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Per-asset shield selection (backend id, or null = public). Local UI state;
+  // becomes a shield proposal once a backend's shield path is live.
+  const [shield, setShield] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     if (!activeOwner) return;
@@ -88,6 +92,7 @@ export default function AssetsPage() {
                   <TableCell align="right">Balance</TableCell>
                   <TableCell align="right">Value</TableCell>
                   <TableCell align="right">24h</TableCell>
+                  <TableCell align="right">Privacy</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -124,6 +129,12 @@ export default function AssetsPage() {
                       </TableCell>
                       <TableCell align="right" sx={{ color: chColor }}>
                         {ch != null ? `${ch >= 0 ? "+" : ""}${ch.toFixed(2)}%` : "—"}
+                      </TableCell>
+                      <TableCell align="right">
+                        <PrivacyModeControl
+                          value={shield[r.mint] ?? null}
+                          onChange={(id) => setShield((s) => ({ ...s, [r.mint]: id }))}
+                        />
                       </TableCell>
                     </TableRow>
                   );

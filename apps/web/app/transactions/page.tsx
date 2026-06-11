@@ -17,9 +17,6 @@ import {
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useMultisig } from "@/components/MultisigContext";
 import { SendDialog } from "@/components/SendDialog";
-import { PrivateVotePanel } from "@/components/PrivateVotePanel";
-import { isPrivateVoteWrapped } from "@/lib/privateVote";
-import { isTeeVoteWrapped } from "@/lib/teeVote";
 import {
   buildApprove,
   buildExecute,
@@ -48,7 +45,6 @@ export default function TransactionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyIdx, setBusyIdx] = useState<bigint | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
-  const [privateVoteIdx, setPrivateVoteIdx] = useState<bigint | null>(null);
 
   // Personal wallet tx history (simple recent signatures)
   const [personalTxs, setPersonalTxs] = useState<Array<{signature: string; slot: number; blockTime: number | null | undefined; err: any}> | null>(null);
@@ -122,15 +118,6 @@ export default function TransactionsPage() {
 
   const youAreSigner =
     !isPersonal && publicKey && multisig!.members.some((m) => m.pubkey.equals(publicKey));
-  const arciumWrapped = !isPersonal && isPrivateVoteWrapped(
-    multisig!.members.map((m) => m.pubkey),
-    multisig!.address,
-  );
-  const teeWrapped = !isPersonal && isTeeVoteWrapped(
-    multisig!.members.map((m) => m.pubkey),
-    multisig!.address,
-  );
-  const wrapped = arciumWrapped || teeWrapped;
 
   async function act(
     idx: bigint,
@@ -344,17 +331,7 @@ export default function TransactionsPage() {
                   )}
                 </Box>
                 <Stack direction="row" spacing={1}>
-                  {wrapped && r.status !== "Executed" && (
-                    <Button
-                      size="small"
-                      variant="contained"
-                      onClick={() => setPrivateVoteIdx(r.index)}
-                      disabled={busyIdx === r.index}
-                    >
-                      {teeWrapped ? "Private vote (TEE)" : "Private vote"}
-                    </Button>
-                  )}
-                  {canApprove && !wrapped && (
+                  {canApprove && (
                     <Button
                       size="small"
                       variant="contained"
@@ -393,15 +370,6 @@ export default function TransactionsPage() {
         </CardContent>
       </Card>
       <SendDialog open={sendOpen} onClose={() => setSendOpen(false)} />
-      {privateVoteIdx !== null && (
-        <PrivateVotePanel
-          open
-          onClose={() => setPrivateVoteIdx(null)}
-          multisig={m.address}
-          transactionIndex={privateVoteIdx}
-          isTeeWrapped={teeWrapped}
-        />
-      )}
     </Box>
   );
 }

@@ -10,10 +10,7 @@
 // Storage key constants exported so the UI can read/write directly.
 export const ENV_OVERRIDE_KEYS = {
   rpcUrl:                  "redacted-env-rpc-url",
-  magicRouterEndpoint:     "redacted-env-magic-router",
   squadsProgramId:         "redacted-env-squads-program",
-  privateVoteProgramId:    "redacted-env-private-vote-program",
-  privateVoteTeeProgramId: "redacted-env-private-vote-tee-program",
 } as const;
 
 export type EnvOverrideKey = keyof typeof ENV_OVERRIDE_KEYS;
@@ -90,43 +87,6 @@ export const HELIUS_API_KEY: string | null = (() => {
 
 export const DEFAULT_MULTISIG = process.env.NEXT_PUBLIC_DEFAULT_MULTISIG ?? "";
 
-// === Private Vote Program IDs ===
-// These override the program IDs baked into the IDL files.
-// The IDLs currently contain localnet addresses. For mainnet use, you must:
-// 1. Deploy the programs to mainnet (see private_vote/ directory).
-// 2. Set these env vars OR the matching localStorage overrides.
-export const PRIVATE_VOTE_PROGRAM_ID_OVERRIDE = resolveValidated(
-  ENV_OVERRIDE_KEYS.privateVoteProgramId,
-  process.env.NEXT_PUBLIC_PRIVATE_VOTE_PROGRAM_ID,
-  "",
-  isAllowedProgramIdOverride,
-);
-
-export const PRIVATE_VOTE_TEE_PROGRAM_ID_OVERRIDE = resolveValidated(
-  ENV_OVERRIDE_KEYS.privateVoteTeeProgramId,
-  process.env.NEXT_PUBLIC_PRIVATE_VOTE_TEE_PROGRAM_ID,
-  "",
-  isAllowedProgramIdOverride,
-);
-
-// === MagicBlock TEE Router ===
-// Used for routing vote transactions into MagicBlock Ephemeral Rollups (for the TEE privacy backend).
-//
-// Devnet:  https://devnet.magicblock.app
-// Mainnet: Check current MagicBlock docs — mainnet routers may require registration.
-export const MAGIC_ROUTER_ENDPOINT = resolveValidated(
-  ENV_OVERRIDE_KEYS.magicRouterEndpoint,
-  process.env.NEXT_PUBLIC_MAGIC_ROUTER_ENDPOINT,
-  "https://devnet.magicblock.app",
-  (v) => {
-    if (!v) return false;
-    try {
-      const u = new URL(v);
-      return u.protocol === "https:" && u.hostname.endsWith(".magicblock.app");
-    } catch { return false; }
-  },
-);
-
 // === Squads Multisig Program ===
 // Almost always the mainnet v4 program. Override should be base58 pubkey only —
 // an attacker repointing this is a drain primitive. (Fable 5 audit 2026-06-10.)
@@ -140,8 +100,5 @@ export const SQUADS_PROGRAM_ID = resolveValidated(
 // Defaults exported so the UI can show "current default" inline.
 export const ENV_DEFAULTS = {
   rpcUrl:                  process.env.NEXT_PUBLIC_RPC_URL || "https://api.mainnet-beta.solana.com",
-  magicRouterEndpoint:     process.env.NEXT_PUBLIC_MAGIC_ROUTER_ENDPOINT || "https://devnet.magicblock.app",
   squadsProgramId:         process.env.NEXT_PUBLIC_SQUADS_PROGRAM_ID || "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf",
-  privateVoteProgramId:    process.env.NEXT_PUBLIC_PRIVATE_VOTE_PROGRAM_ID || "",
-  privateVoteTeeProgramId: process.env.NEXT_PUBLIC_PRIVATE_VOTE_TEE_PROGRAM_ID || "",
 } as const;

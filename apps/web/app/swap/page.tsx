@@ -18,6 +18,7 @@ import {
   getSwapInstructions,
   type JupiterQuote,
 } from "@/lib/jupiter-swap";
+import PrivacyModeControl from "@/components/PrivacyModeControl";
 import { buildProposeTransaction, loadMultisig } from "@/lib/squads";
 import { getBackendIdFor, ACTIVITIES, backendsForActivity } from "@/lib/privacy-prefs";
 
@@ -42,15 +43,17 @@ export default function SwapPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sig, setSig] = useState<string | null>(null);
+  // Shield-swap: which privacy backend to route this swap through (null = public).
+  const [swapShield, setSwapShield] = useState<string | null>(null);
 
-  // Which privacy backend the user picked for dApp activity. Surfaced read-only
-  // here so they can see what the swap will route through once each backend's
+  // Which privacy backend the user picked for swap activity. Surfaced read-only
+  // here so they can see what the swap will route through once the backend's
   // vault_transfer impl is finished. Today vault swaps go through plain Squads;
-  // when Light SPL / Token-2022 confidential land, the same pick will activate.
+  // when Light SPL shielding lands, the same pick will activate.
   const vaultKey = activeOwner ? activeOwner.toBase58() : "__default__";
-  const privacyPickId = getBackendIdFor(vaultKey, "dapp");
-  const dappActivity = ACTIVITIES.find((a) => a.key === "dapp")!;
-  const privacyPick = backendsForActivity(dappActivity).find((b) => b.id === privacyPickId);
+  const privacyPickId = getBackendIdFor(vaultKey, "swap");
+  const swapActivity = ACTIVITIES.find((a) => a.key === "swap")!;
+  const privacyPick = backendsForActivity(swapActivity).find((b) => b.id === privacyPickId);
 
   const baseUnits = useMemo(
     () => toBaseUnits(inputAmount, inToken.decimals),
@@ -210,6 +213,24 @@ export default function SwapPage() {
               </Stack>
             </Box>
           )}
+
+          {/* Shield swap — route the swap through a privacy backend (hides amounts) */}
+          <Box
+            sx={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              p: 1.5, mb: 1, borderRadius: 1,
+              bgcolor: "rgba(255,255,255,0.025)",
+              border: "1px solid rgba(255,255,255,0.05)",
+            }}
+          >
+            <Box>
+              <Typography variant="body2">Shield swap</Typography>
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                Hide the swap amounts via a privacy protocol
+              </Typography>
+            </Box>
+            <PrivacyModeControl value={swapShield} onChange={setSwapShield} />
+          </Box>
 
           <Box
             sx={{

@@ -137,13 +137,24 @@ export type TrustModel =
 
 export type AuditStatus = "unaudited" | "in-audit" | "audited" | "formally-verified";
 
+// Quantum-resistance class of the backend's CONFIDENTIALITY guarantee.
+// IMPORTANT: this is independent of the Ed25519 signature layer, which is
+// classical (Shor-breakable) for ALL of Solana until a post-quantum signer is
+// added to the multisig. So a "post-quantum" backend gives PQ *confidentiality*
+// (your amounts stay hidden from a future quantum adversary), NOT PQ key
+// security — that's the separate PQ-signer endgame. See each backend's
+// trustNotes for the specific assumption.
+export type QuantumClass =
+  | "post-quantum" // lattice/FHE, information-theoretic MPC, or hash-based — survives Shor
+  | "classical" // discrete-log / pairing-based (ElGamal, Groth16) — Shor-breakable
+  | "hardware" // TEE — security is hardware attestation, orthogonal to quantum (threat is side-channels)
+  | "hybrid"; // mixed / unverified assumptions
+
+// Structured "what this backend actually conceals", for the per-transaction picker.
+export type PrivacyDimension = "amount" | "balance" | "sender" | "receiver" | "graph" | "compute";
+
 export type BackendId =
-  | "arcium"
-  | "magicblock-tee"
-  | "encrypt-fhe"
-  | "token2022-confidential"
   | "light-compressed"
-  | "zkprime"
   | "squads-plain"; // explicit "no privacy" route for cost-priority intents
 
 // Static, hand-curated capabilities. Updated weekly by scripts/weekly-privacy-scan.mjs.
@@ -153,6 +164,10 @@ export type BackendStaticMeta = {
   trustModel: TrustModel;
   auditStatus: AuditStatus;
   privacyScore: PrivacyScore;
+  // Quantum-resistance class of the confidentiality guarantee (see QuantumClass).
+  quantumResistance: QuantumClass;
+  // What this backend conceals — drives the per-transaction picker's "Protects" row.
+  hides: PrivacyDimension[];
   // Intents this backend can handle. The router never asks a backend about an
   // intent it doesn't support.
   supportedIntents: IntentType[];

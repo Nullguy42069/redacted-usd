@@ -18,7 +18,7 @@ const SECTIONS = [
   { id: "bridge",         title: "Bridge" },
   { id: "earn",           title: "Earn" },
   { id: "perps",          title: "Perps" },
-  { id: "privacy",        title: "Privacy backends" },
+  { id: "privacy",        title: "Privacy" },
   { id: "extension",      title: "Browser extension" },
   { id: "settings",       title: "Settings" },
   { id: "troubleshooting",title: "Troubleshooting" },
@@ -87,14 +87,14 @@ export default function HelpPage() {
         <Stack spacing={2.5}>
           <Section id="what-is" title="What is Redacted">
             <Para>
-              Redacted is a privacy-aware multisig vault on Solana. You keep self-custody. The site adds the surfaces you actually need: send, receive, swap, bridge, yield, automated perps trading — each routed through whichever privacy backend you pick for that activity.
+              Redacted is a privacy-aware multisig vault on Solana. You keep self-custody. The site adds the surfaces you actually need: send, receive, swap, bridge, yield, automated perps trading — each with a one-tap Private/Public toggle.
             </Para>
             <Para>
               Two design constraints shape everything:
             </Para>
             <Bullets>
               <li><b>Your keys, your call.</b> Redacted never custodies funds. Multisig vaults are Squads-style on Solana — every transaction is a proposal your signers vote on.</li>
-              <li><b>Privacy as a router, not a wall.</b> A transfer might use Light Protocol compression. A vote might use Arcium MPC or MagicBlock TEE. A dApp swap might prioritize speed and skip privacy. You pick per-activity in Settings → Privacy.</li>
+              <li><b>Privacy is a toggle.</b> Every transfer and swap has a Private/Public switch. <b>Private</b> routes through Light Protocol — Helius-aligned, cheap and fast via ZK compression, with full shielding rolling out alongside Helius&apos;s privacy layer. <b>Public</b> is a standard Squads vault.</li>
             </Bullets>
             <Para>
               Redacted takes no fee on swaps, bridges, or routing. The only fee in the system is on Perps vault profits (10%, high-water mark) — and only when those vaults open for deposit.
@@ -106,7 +106,7 @@ export default function HelpPage() {
               items={[
                 <>Click <Code>Connect Wallet</Code> in the top right. Phantom, Solflare, Backpack, Brave, Ledger, Trezor all work — anything Wallet Standard.</>,
                 <>The first time a wallet connects, it lands in <b>Wallet</b> mode showing only your personal address. To use multisig features, switch to <b>Vault</b> mode at the top.</>,
-                <>If you have no vault yet, hit the <Code>+</Code> button on the topbar to create one. Pick members (1-8 Solana addresses), a threshold (M-of-N approvals), and — if you want encrypted voting — set MagicBlock TEE as your Privacy → Voting preference before creating.</>,
+                <>If you have no vault yet, hit the <Code>+</Code> button on the topbar to create one. Pick members (1-8 Solana addresses) and a threshold (M-of-N approvals).</>,
                 <>Your new vault auto-bookmarks and becomes active. You can add more later, swap between them from the topbar dropdown.</>,
               ]}
             />
@@ -159,7 +159,7 @@ export default function HelpPage() {
               <b>Send</b> opens a dialog: recipient address, amount, optional memo. In Wallet mode the tx fires immediately. In Vault mode a proposal is created — vote in the Transactions tab to execute.
             </Para>
             <Para>
-              The Send flow honors your <b>Token transfers</b> Privacy preference. Today Light Protocol routes native SOL transfers as plain SystemProgram (identical effect, real Light SPL compression ships next). Pick "Public" (Squads-plain) for fastest path, or your privacy backend of choice.
+              The Send flow has the <b>Private/Public</b> toggle. <b>Private</b> routes through Light Protocol (Helius-aligned ZK compression today; full shielding rolling out with Helius). <b>Public</b> is a standard Squads transfer — fully visible on-chain.
             </Para>
             <Para>
               <b>Receive</b> shows your active wallet or vault address with a QR code. Vault addresses are PDAs — fully receivable just like a regular wallet.
@@ -231,21 +231,18 @@ export default function HelpPage() {
             </Para>
           </Section>
 
-          <Section id="privacy" title="Privacy backends">
+          <Section id="privacy" title="Privacy">
             <Para>
-              Settings → Privacy lets you pick a backend per activity. The chosen backend handles that intent type once the privacy router ships.
+              Privacy is one toggle, not a settings page. Every transfer and swap has a <b>Private / Public</b> switch:
             </Para>
             <KvList
               items={[
-                ["Arcium MPC", "Encrypted compute via Multi-Party Computation. Best for: voting, sealed-bid auctions, anything that needs computation on private inputs. Slower (~30s per compute). Privacy score 80/100."],
-                ["MagicBlock TEE", "Intel TDX ephemeral rollups. Best for: private voting where speed matters (sub-second). Trusts the TEE hardware. Privacy score 60/100. Already deployed on mainnet — create a vault with MagicBlock as your Voting preference to get encrypted votes."],
-                ["Light Protocol", "ZK state compression + shielded transfers. Best for: token transfers, balances. Saves rent (~100× cheaper accounts). Native Solana primitive. Privacy score 45/100."],
-                ["Token-2022 Confidential", "Native SPL extension. Hides transfer amounts via ElGamal encryption. Does not hide sender/receiver. Privacy score 50/100."],
-                ["Public (Squads-plain)", "Standard Squads multisig. Everything on chain, no privacy overhead. Fastest. Best for: dApp activity where block-time matters more than amount privacy."],
+                ["Private — Light Protocol", "Helius-aligned (the same vendor as our RPC), so it's cheap and fast via ZK compression. Today that means dramatically cheaper transactions; full shielding (hiding amounts and counterparties) rolls out with Helius's privacy layer. We bet on one protocol and do it well."],
+                ["Public — Squads", "Standard Squads multisig. Everything on chain, no privacy overhead, fastest path. The safe default."],
               ]}
             />
             <Para>
-              Today, picks are saved per-vault per-activity. The router consumes them in Send (fully wired) and in vault creation (TEE-wrapped vaults work end-to-end). Light SPL compression and Token-2022 confidential transfer builders are scaffolded and will activate when their SDKs are finished — no UI change required, the preferences already understand them.
+              That&apos;s the whole model: pick Private or Public per transaction. No per-activity backend matrix, no protocol to choose — Light handles privacy, Squads handles public.
             </Para>
           </Section>
 
@@ -270,7 +267,7 @@ export default function HelpPage() {
             </Para>
             <KvList
               items={[
-                ["Setup", "Vault nonce, voting mode (Public / TEE / Arcium), program version, members + manage signers (Add / Remove via config-tx proposals)."],
+                ["Setup", "Vault nonce, voting mode (Public), program version, members + manage signers (Add / Remove via config-tx proposals)."],
                 ["Appearance", "Light or dark mode. Saved per-browser."],
                 ["Notifications", "Browser push permission per-vault. Today fires when a Redacted tab is open; service-worker background push ships in v2."],
                 ["Modules", "Spending limits, time lock, program modules. Spending limits = bounded delegation (a signer can spend up to X token Y per period without full multisig vote). Time lock = global delay on every approval-to-execution transition."],
@@ -312,7 +309,7 @@ export default function HelpPage() {
               <b>For automated trading (Percolator era):</b> the agent gets a delegated-trader role that can <b>open / close / modify positions</b> but <b>cannot withdraw collateral</b>. If the API key leaks, the attacker can only trade your funds within the vault — they cannot take them.
             </Para>
             <Para>
-              <b>What's not yet audited:</b> the TEE voting program, the recovery program, any future Arcium MXE we deploy. Don't put real money behind unaudited custom programs.
+              <b>What's not yet audited:</b> the recovery program and any future custom programs we deploy. Don't put real money behind unaudited custom programs.
             </Para>
           </Section>
 

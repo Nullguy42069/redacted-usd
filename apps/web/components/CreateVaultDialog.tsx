@@ -23,16 +23,14 @@ import { detectNetwork } from "@redacted-usd/aggregator";
 import { getAggregator } from "@/lib/aggregator";
 import { useMultisig } from "./MultisigContext";
 import { addVault } from "@/lib/vault-store";
-import { getDefaultBackendId, setBackendIdFor } from "@/lib/privacy-prefs";
 import { invalidateAll } from "@/lib/rpc-cache";
 import Link from "next/link";
 
 type Props = { open: boolean; onClose: () => void };
 
-// "Create vault" flow. The user picks members and threshold. The privacy
-// backend (plain Squads / Arcium / TEE / etc.) comes from the user's saved
-// preference in Settings → Privacy — keeping the create flow simple and
-// letting users change the preference anytime without re-creating vaults.
+// "Create vault" flow. The user picks members and threshold. Vaults are created
+// through the plain Squads backend; privacy (Light Protocol shielding) is a
+// per-transfer choice made later, not a vault-creation-time setting.
 export function CreateVaultDialog({ open, onClose }: Props) {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
@@ -40,14 +38,6 @@ export function CreateVaultDialog({ open, onClose }: Props) {
 
   const [membersText, setMembersText] = useState("");
   const [threshold, setThreshold] = useState("2");
-  // Read the user's account-wide voting-privacy preference set in Settings →
-  // Privacy. We pin the routing allowList to that backend so the user's pick
-  // turns into a real on-chain effect at vault creation (TEE-wrapped vs
-  // standard Squads vs Arcium etc.).
-  const votingPrefBackend = useMemo(() => {
-    if (typeof window === "undefined") return "squads-plain";
-    return getDefaultBackendId("voting");
-  }, []);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Per-member Execute permission toggle. Initiate + Vote are always granted
@@ -112,13 +102,9 @@ export function CreateVaultDialog({ open, onClose }: Props) {
     duplicateAddresses.length === 0 &&
     !thresholdInvalid;
 
-  // SAFETY RAIL: lock vault creation to squads-plain regardless of the user's
-  // saved voting-privacy preference. Privacy-wrapped vault creation (Arcium /
-  // MagicBlock TEE) is not yet deployed on mainnet — those backends split
-  // permissions in a way that bricks the vault if the off-chain MPC/TEE isn't
-  // live to sign. We let users keep their voting-privacy pref for the FUTURE
-  // voting flow, but the vault itself must be created with plain Squads on
-  // mainnet today.
+  // Vault creation always goes through the plain Squads backend. Privacy
+  // (Light Protocol shielding) is applied per-transfer later, not at vault
+  // creation time.
   const policy: Policy = useMemo(
     () => ({
       weights: { speed: 33, privacy: 0, cost: 67 },
@@ -191,11 +177,6 @@ export function CreateVaultDialog({ open, onClose }: Props) {
         // A new vault was created — clear ALL cached state so the discovery /
         // assets / proposal queries refetch fresh against the new account.
         invalidateAll();
-        // Persist the chosen voting backend for this brand-new vault so the
-        // Approve flow downstream knows to route through it (e.g. TEE).
-        try {
-          setBackendIdFor(addr, "voting", result.meta?.routedVia ?? votingPrefBackend);
-        } catch {}
         setAddress(addr);
         setMode('vault');
         onClose();
@@ -218,7 +199,7 @@ export function CreateVaultDialog({ open, onClose }: Props) {
       <DialogContent>
         <Stack spacing={2.5} sx={{ mt: 1 }}>
           <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
-            Set the members and threshold. Privacy backend is set in{" "}
+            Set the members and threshold. Per-transfer privacy is set in{" "}
             <Link href="/settings" style={{ color: "inherit", textDecoration: "underline" }} onClick={onClose}>
               Settings → Privacy
             </Link>{" "}
@@ -227,8 +208,7 @@ export function CreateVaultDialog({ open, onClose }: Props) {
 
           {detectNetwork(connection) !== "mainnet" && (
             <Alert severity="warning" sx={{ fontSize: 13 }}>
-              You are connected to <strong>devnet</strong>. Vault creation with privacy backends (Arcium / TEE) is only supported on mainnet.
-              Switch your RPC to a mainnet endpoint in Settings for reliable vault creation.
+              You are connected to <strong>devnet</strong>. Switch your RPC to a mainnet endpoint in Settings for reliable vault creation.
             </Alert>
           )}
 

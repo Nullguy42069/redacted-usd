@@ -77,22 +77,14 @@ then mainnet with a small-value vault before declaring "verified".
 - [ ] With time lock > 0, a subsequent proposal cannot execute before the delay elapses (Squads enforces — confirm at the chain level)
 - [ ] Setting time lock to 0 returns to instant execution
 
-## Settings → Privacy
+## Privacy toggle (Private / Public)
 
-- [ ] All 4 activity sections render: Token transfers, Voting, dApp activity, Compute/auctions
-- [ ] Each section's "compatible backends" list matches the registry's `supportedIntents` filter
-- [ ] Selecting a backend updates the localStorage key `redacted-privacy-prefs-v1` for the right (vault, activity) pair
-- [ ] Selecting a backend updates the "Now: …" chip immediately
-- [ ] Switching active vault in topbar shows that vault's independent picks (no leak between vaults)
-- [ ] Active vs Monitoring vs Deprecated chips render correctly per registry status
-- [ ] Devnet badge shows on non-mainnet backends (e.g. Encrypt FHE devnet)
-- [ ] Privacy-score bar renders in proportion to the score
-- [ ] Latency/Cost/Trust/Audit pills render with the registry values
-- [ ] **Routing test (v2):** once the privacy router ships, verify that a Send transaction routes through the backend the user picked for "Token transfers"
-- [ ] **Routing test (v2):** voting on a proposal routes through the "Voting" backend
-- [ ] **Routing test (v2):** a Jupiter swap via the apps page routes through the "dApp activity" backend
-- [ ] **Routing test (v2):** a compute/auction intent routes through the "Compute" backend
-- [ ] **Routing test (v2):** missing backend (e.g. user picked Encrypt FHE while still devnet-only) falls back gracefully or warns at submit time
+- [ ] The Private/Public toggle renders on each Assets row and on the Swap flow
+- [ ] Toggling shows "Private" (Light) ↔ "Public" (Squads) with the correct tooltip
+- [ ] No "Privacy" tab in Settings (privacy is per-transaction only)
+- [ ] **Routing test:** a Public transfer routes through plain Squads (visible on-chain)
+- [ ] **Routing test:** a Private transfer routes through Light Protocol
+- [ ] **When Helius shielding ships:** Private hides amounts/counterparties; relabel the toggle accordingly
 
 ## Settings → Modules → Program modules
 
