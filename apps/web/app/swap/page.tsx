@@ -57,14 +57,18 @@ export default function SwapPage() {
   // The connected wallet/vault's actual token holdings, so the picker shows what
   // you can trade (not just presets). Loaded lazily; failures fall back to [].
   const [walletTokens, setWalletTokens] = useState<AssetRow[] | null>(null);
+  // Depend on the STABLE base58 string, not the PublicKey object identity, so a
+  // re-created activeOwner ref can never loop this effect into a fetch storm.
+  const activeOwnerKey = activeOwner ? activeOwner.toBase58() : null;
   useEffect(() => {
-    if (!activeOwner) { setWalletTokens(null); return; }
+    if (!activeOwnerKey) { setWalletTokens(null); return; }
     let cancelled = false;
-    loadAssets(connection, activeOwner)
+    loadAssets(connection, new PublicKey(activeOwnerKey))
       .then((rows) => { if (!cancelled) setWalletTokens(rows); })
       .catch(() => { if (!cancelled) setWalletTokens([]); });
     return () => { cancelled = true; };
-  }, [connection, activeOwner]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection, activeOwnerKey]);
 
   // The Private switch shields the swap OUTPUT via Umbra — only possible in
   // personal mode (Umbra needs the wallet as signer) with a live shield backend,

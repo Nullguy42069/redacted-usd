@@ -1,10 +1,9 @@
 "use client";
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { registerServiceWorker } from "@/lib/notifications";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { LedgerWalletAdapter } from "@solana/wallet-adapter-ledger";
-import { TrezorWalletAdapter } from "@solana/wallet-adapter-trezor";
+import type { Adapter } from "@solana/wallet-adapter-base";
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v15-appRouter";
 import { getTheme } from "@/lib/theme";
@@ -102,12 +101,30 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // primes the SW so the first notification doesn't pay the registration cost.
   useEffect(() => { registerServiceWorker(); }, []);
 
-  // wallet-standard discovery picks up most browser wallets automatically.
-  // We explicitly add hardware wallets so Ledger and Trezor appear in the selection UI.
-  const wallets = useMemo(
-    () => [new LedgerWalletAdapter(), new TrezorWalletAdapter()],
-    []
-  );
+  // wallet-standard discovery picks up most browser wallets (Phantom, Solflare,
+  // Backpack, Brave, …) automatically and instantly — they need no adapter here.
+  // The Ledger + Trezor adapters are HEAVY (Trezor's connect SDK pulls usb +
+  // protobuf, multiple MB) and were previously imported eagerly on every page,
+  // bloating first-load JS enough to OOM-crash heavier tabs (e.g. Brave). We now
+  // load them lazily AFTER mount, in their own chunk, so they're out of the
+  // initial bundle but still appear in the wallet list a moment later.
+  const [hwWallets, setHwWallets] = useState<Adapter[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ LedgerWalletAdapter }, { TrezorWalletAdapter }] = await Promise.all([
+          import("@solana/wallet-adapter-ledger"),
+          import("@solana/wallet-adapter-trezor"),
+        ]);
+        if (!cancelled) setHwWallets([new LedgerWalletAdapter(), new TrezorWalletAdapter()]);
+      } catch (e) {
+        console.warn("Hardware wallet adapters failed to load (Ledger/Trezor unavailable):", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const wallets = hwWallets;
 
   const onError = (error: Error) => {
     // Expected user-driven outcomes — log quietly, don't surface as runtime errors.
