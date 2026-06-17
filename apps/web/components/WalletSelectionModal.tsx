@@ -26,6 +26,7 @@ interface WalletOption {
   color: string;
   adapterName?: string;
   isHardware?: boolean;
+  installUrl?: string;
 }
 
 export function WalletSelectionModal({ 

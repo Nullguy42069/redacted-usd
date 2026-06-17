@@ -8,10 +8,12 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "check:no-fees": "node scripts/check-no-fees.mjs",
+    "check:fees": "node scripts/check-fees.mjs",
     "check:audit": "pnpm audit --audit-level high",
     "check:csp": "node scripts/check-csp.mjs",
-    "check:all": "pnpm check:no-fees && pnpm check:audit && pnpm check:csp"
+    "check:all": "pnpm check:fees && pnpm check:audit && pnpm check:csp",
+    "verify": "pnpm check:fees && pnpm typecheck && pnpm check:audit",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "engines": {
     "node": ">=20"

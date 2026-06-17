@@ -24,29 +24,30 @@ import type { BackendStaticMeta } from "../types";
 
 export const REGISTRY: BackendStaticMeta[] = [
   {
-    id: "light-compressed",
+    id: "umbra",
+    // ACTIVE — the audit's fund-lock finding is fixed: unshield now reads the
+    // decrypted SHIELDED balance (getEncryptedBalanceQuerierFunction) and shield
+    // uses exact public-ATA base units. SDK is still RC (5.0.0-rc.6) and the
+    // round-trip is unverified end-to-end, so test with a tiny amount first.
     selectionStatus: "active",
-    displayName: "Light Protocol (ZK Compression + Confidential Transfers)",
-    trustModel: "validators",
-    auditStatus: "audited",
-    // 2026 reality: Strong ZK infrastructure + shielded transfer flows.
-    // Excellent cost layer + real confidentiality options via ZK compression
-    // and shielded transfers. A first-class citizen for transfers and as a
-    // scaling/privacy foundation.
-    quantumResistance: "classical", // shielded-transfer proofs are pairing-based (Groth16); the Merkle/hash commitment layer is itself PQ
-    hides: ["amount"],
-    privacyScore: 45,
-    supportedIntents: ["storage", "transfer", "vault_transfer"],
-    network: "mainnet",
-    baselineLatencyMs: 800,
+    displayName: "Umbra (Arcium shielded balances)",
+    trustModel: "mpc",
+    auditStatus: "unaudited", // @umbra-privacy/sdk is 5.0.0-rc.6 — confirm Umbra mainnet audit before promoting
+    quantumResistance: "post-quantum", // Arcium = information-theoretic MPC; confidentiality survives Shor (signature layer still classical, like all of Solana)
+    hides: ["amount", "balance", "sender", "graph"],
+    privacyScore: 60,
+    supportedIntents: ["transfer", "vault_transfer", "storage"],
+    network: "mainnet", // wSOL/USDC/USDT live on mainnet; devnet = wSOL only
+    baselineLatencyMs: 4000, // MPC compute + proof + relayer submit
     baselineCostLamports: 5000,
     trustNotes: [
-      "Native compression is a cost/scalability primitive (state remains committed on-chain).",
-      "ZK shielded transfer flows provide strong confidentiality for amounts (and optionally participants).",
-      "Helius-aligned — same vendor as our RPC; cheap + fast via ZK compression.",
-      "Sponsors and actively supports 2026 Solana privacy ecosystem (Privacy Hack, ZK tooling).",
+      "Powered by Arcium MPC — encrypted token accounts + UTXO/stealth-pool 'airlock'.",
+      "Hides amounts/balances + breaks linkage (sender/graph). A 'private swap' is shield → fresh addr → Jupiter → re-shield, NOT a native confidential swap.",
+      "Shield IN is free; a small % fee is deducted from the encrypted balance on transfer/exit; the relayer submits exits (gasless).",
+      "Solana-only (umbraprivacy.com). NOT ScopeLift's EVM umbra.cash — unrelated project/team/tech.",
+      "Integration via @umbra-privacy/sdk@5.0.0-rc.6 (release candidate). Pin version + confirm Umbra's mainnet audit before promoting to active.",
     ],
-    lastVerifiedAt: "2026-05-31",
+    lastVerifiedAt: "2026-06-17",
   },
   {
     id: "squads-plain",

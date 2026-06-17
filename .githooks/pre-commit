@@ -1,0 +1,25 @@
+#!/bin/sh
+# Fast local guardrail. Heavy checks (typecheck, audit) run in CI; this keeps the
+# two things that must NEVER land even by accident: a tampered fee config, and an
+# obvious committed secret.
+set -e
+
+# 1) Fee integrity — wallet pinned + caps not raised.
+node scripts/check-fees.mjs
+
+# 2) Cheap secret scan on staged files (private keys, .env, raw keypairs).
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -n "$staged" ]; then
+  for f in $staged; do
+    case "$f" in
+      *.env|*.env.*|*id_rsa*|*.pem|*keypair*.json) echo "pre-commit BLOCK: refusing to commit secret-like file: $f"; exit 1;;
+    esac
+  done
+  # Grep staged content for obvious private-key material.
+  if git diff --cached -U0 -- $staged | grep -nE 'BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY|HELIUS_API_KEY=[A-Za-z0-9-]{8,}' >/dev/null; then
+    echo "pre-commit BLOCK: staged diff contains private-key / API-key material."
+    exit 1
+  fi
+fi
+
+echo "pre-commit OK"

@@ -51,13 +51,28 @@ export function generateApiKey(vaultAddresses: string[], label?: string): string
   return key;
 }
 
+// Constant-time string compare — avoids leaking how many leading characters of a
+// candidate key match via response-timing. (A `===` short-circuits on first
+// mismatch.) crypto.timingSafeEqual requires equal-length buffers, so we length-
+// gate first; key length itself isn't the secret (fixed format: rdu_ + 64 hex).
+function timingSafeStrEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
+
 export function validateApiKey(key: string): { valid: boolean; vaults: string[] } {
+  if (!key) return { valid: false, vaults: [] };
   const keys = loadKeys();
-  const record = keys.find(k => k.key === key);
-  if (!record) {
-    return { valid: false, vaults: [] };
+  // Scan ALL records (no early break) and compare each in constant time, so the
+  // total work doesn't depend on which key (if any) matched.
+  let match: ApiKeyRecord | null = null;
+  for (const record of keys) {
+    if (timingSafeStrEqual(record.key, key)) match = record;
   }
-  return { valid: true, vaults: record.vaults };
+  if (!match) return { valid: false, vaults: [] };
+  return { valid: true, vaults: match.vaults };
 }
 
 export function revokeApiKey(key: string): boolean {

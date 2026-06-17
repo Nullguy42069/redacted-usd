@@ -18,7 +18,11 @@ export type Readiness = "live" | "partial" | "in-development" | "devnet" | "voti
 // Hand-curated reality check, kept next to the metadata so it's auditable.
 const READINESS: Record<BackendId, { readiness: Readiness; note: string }> = {
   "squads-plain": { readiness: "live", note: "Public transfer — no privacy. The safe default." },
-  "light-compressed": { readiness: "partial", note: "Compresses SPL tokens; native SOL falls back to a public transfer (no privacy)." },
+  // Umbra is THE privacy path and is now LIVE: shield uses exact public-ATA base
+  // units; unshield reads the decrypted SHIELDED balance (the audit's fund-lock
+  // bug is fixed). SDK is still RC and the round-trip is unverified end-to-end —
+  // test a tiny amount first on mainnet.
+  "umbra": { readiness: "live", note: "Arcium shielded balances via @umbra-privacy/sdk (RC). Live — shield/unshield wired against the SDK; verify a tiny round-trip on mainnet first." },
 };
 
 const QUANTUM_LABEL: Record<QuantumClass, string> = {

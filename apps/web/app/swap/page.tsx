@@ -18,8 +18,9 @@ import {
   getSwapInstructions,
   type JupiterQuote,
 } from "@/lib/jupiter-swap";
-import PrivacyModeControl from "@/components/PrivacyModeControl";
 import { buildProposeTransaction, loadMultisig } from "@/lib/squads";
+import { payPercentFee, percentFeeLamports, getSolUsdPrice, feeTransferIx, tokenUsdValue } from "@/lib/fees";
+import { guardJupiterSwap } from "@/lib/tx-guard";
 import { getBackendIdFor, ACTIVITIES, backendsForActivity } from "@/lib/privacy-prefs";
 
 type Token = { symbol: string; name: string; mint: string; decimals: number };
@@ -43,13 +44,7 @@ export default function SwapPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sig, setSig] = useState<string | null>(null);
-  // Shield-swap: which privacy backend to route this swap through (null = public).
-  const [swapShield, setSwapShield] = useState<string | null>(null);
 
-  // Which privacy backend the user picked for swap activity. Surfaced read-only
-  // here so they can see what the swap will route through once the backend's
-  // vault_transfer impl is finished. Today vault swaps go through plain Squads;
-  // when Light SPL shielding lands, the same pick will activate.
   const vaultKey = activeOwner ? activeOwner.toBase58() : "__default__";
   const privacyPickId = getBackendIdFor(vaultKey, "swap");
   const swapActivity = ACTIVITIES.find((a) => a.key === "swap")!;
@@ -103,9 +98,21 @@ export default function SwapPage() {
     setSig(null);
     try {
       const tx = await getSwapTransaction(quote, publicKey.toBase58());
+      // Don't blind-sign the provider's tx: enforce user-only signer + Jupiter
+      // program allowlist (LUT-resolved) before it reaches the wallet.
+      await guardJupiterSwap(connection, tx, publicKey.toBase58());
       const s = await sendTransaction(tx, connection);
       await connection.confirmTransaction(s, "confirmed");
       setSig(s);
+      // Redacted fee: 0.1% of input value, capped at $0.99, in SOL — charged
+      // AFTER the swap confirms so a failed/cancelled swap is never billed.
+      // Best-effort: a fee/price failure must not surface as a swap error.
+      try {
+        const inUsd = await tokenUsdValue(inToken.mint, Number(quote.inAmount), inToken.decimals);
+        await payPercentFee(connection, sendTransaction, publicKey, inUsd);
+      } catch (feeErr) {
+        console.warn("[fee] swap fee skipped:", feeErr);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -124,7 +131,12 @@ export default function SwapPage() {
         quote,
         multisig.vault.toBase58(),
       );
+      // Redacted fee: 0.1% of input value, capped at $0.99, paid in SOL by the
+      // vault, composed into the same proposal.
+      const inUsd = await tokenUsdValue(inToken.mint, Number(quote.inAmount), inToken.decimals);
+      const feeLamports = percentFeeLamports(inUsd, await getSolUsdPrice());
       const inner = [
+        ...(feeLamports > 0 ? [feeTransferIx(multisig.vault, feeLamports)] : []),
         ...swapIxs.computeBudgetInstructions,
         ...swapIxs.setupInstructions,
         swapIxs.swapInstruction,
@@ -213,24 +225,6 @@ export default function SwapPage() {
               </Stack>
             </Box>
           )}
-
-          {/* Shield swap — route the swap through a privacy backend (hides amounts) */}
-          <Box
-            sx={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              p: 1.5, mb: 1, borderRadius: 1,
-              bgcolor: "rgba(255,255,255,0.025)",
-              border: "1px solid rgba(255,255,255,0.05)",
-            }}
-          >
-            <Box>
-              <Typography variant="body2">Shield swap</Typography>
-              <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                Hide the swap amounts via a privacy protocol
-              </Typography>
-            </Box>
-            <PrivacyModeControl value={swapShield} onChange={setSwapShield} />
-          </Box>
 
           <Box
             sx={{
@@ -353,7 +347,7 @@ export default function SwapPage() {
           >
             <InfoOutlined sx={{ color: "secondary.main", fontSize: 16, flexShrink: 0, mt: 0.25 }} />
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
-              Best price across every Solana DEX. <b>Redacted takes no swap fee.</b>
+              Best price across every Solana DEX.
               {!isPersonal && " Vault swaps create a proposal that needs threshold approvals to execute."}
             </Typography>
           </Box>

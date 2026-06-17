@@ -3,17 +3,32 @@
 
 const STORAGE_KEY = 'activeVault';
 
-// Allowed Redacted URLs (must match manifest content_scripts redacted match list)
+// Allowed Redacted URLs (must match manifest content_scripts redacted match list).
+// Canonical app domain is redacted-usd.xyz — we deliberately do NOT trust
+// .com/.pro here: pointing the wallet bridge (vault selection + propose relay)
+// at domains the project may not own would let whoever controls them drive the
+// extension. localhost is dev-only.
 const REDACTED_URLS = [
   'http://localhost:3000/*',
-  'https://redacted-usd.com/*',
-  'https://*.redacted-usd.com/*',
-  'https://redacted-usd.pro/*',
-  'https://*.redacted-usd.pro/*',
+  'https://redacted-usd.xyz/*',
+  'https://*.redacted-usd.xyz/*',
 ];
 
 // Production app URL used when we have to open a new tab from scratch.
-const REDACTED_APP_URL = 'https://redacted-usd.pro/apps';
+const REDACTED_APP_URL = 'https://redacted-usd.xyz/apps';
+
+// Origins permitted to drive privileged messages (vault-set). A sender must be a
+// Redacted tab, not an arbitrary dApp content script.
+const REDACTED_ORIGIN_RE = /^(https:\/\/(.*\.)?redacted-usd\.xyz|http:\/\/localhost:3000)$/;
+
+function senderIsRedacted(sender) {
+  try {
+    const u = sender?.origin || (sender?.url ? new URL(sender.url).origin : null);
+    return !!u && REDACTED_ORIGIN_RE.test(u);
+  } catch {
+    return false;
+  }
+}
 
 async function getVault() {
   const { [STORAGE_KEY]: vault } = await chrome.storage.local.get(STORAGE_KEY);
@@ -58,13 +73,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg.kind === 'vault-get') {
         sendResponse({ vault: await getVault() });
       } else if (msg.kind === 'vault-set') {
+        // Only a genuine Redacted tab may set the active vault. Without this, any
+        // content script could repoint which vault the extension reports/uses.
+        if (!senderIsRedacted(sender)) {
+          sendResponse({ ok: false, error: 'unauthorized-origin' });
+          return;
+        }
         await setVault(msg.vault);
         sendResponse({ ok: true });
       } else if (msg.kind === 'open-redacted') {
         await focusOrOpenRedacted();
         sendResponse({ ok: true });
       } else if (msg.kind === 'propose') {
-        const vault = msg.vault || (await getVault());
+        // Always use the extension's own stored vault — NEVER the vault a dApp
+        // content script supplies. A dApp must not get to choose which of the
+        // user's vaults a proposal targets.
+        const vault = await getVault();
         if (!vault) {
           await focusOrOpenRedacted();
           sendResponse({ ok: false, error: 'No active vault. Open Redacted and pick one.' });

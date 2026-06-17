@@ -21,7 +21,7 @@ interface ActivityPanelProps {
 
 export function ActivityPanel({ open, onClose }: ActivityPanelProps) {
   // Placeholder data - will be replaced with real transaction/activity data later
-  const activities = [
+  const activities: { type: string; description: string; status: string; timestamp: string }[] = [
     // Example structure for when we wire real data:
     // {
     //   id: "tx-123",
@@ -106,7 +106,7 @@ export function ActivityPanel({ open, onClose }: ActivityPanelProps) {
                   <ListItemText
                     primary={activity.type}
                     secondary={activity.description}
-                    primaryTypographyProps={{ fontWeight: 500 }}
+                    slotProps={{ primary: { sx: { fontWeight: 500 } } }}
                   />
                   <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.5 }}>
                     <Typography variant="caption" sx={{ color: "#8E8E93" }}>

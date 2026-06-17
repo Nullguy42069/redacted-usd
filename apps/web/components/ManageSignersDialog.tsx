@@ -17,6 +17,7 @@ import {
   shortAddress,
 } from "@/lib/squads";
 import { invalidateAfterTx } from "@/lib/rpc-cache";
+import { payFlatFee } from "@/lib/fees";
 
 type Mode = "add" | "remove" | "threshold";
 
@@ -136,6 +137,7 @@ export function ManageSignersDialog({ open, onClose }: { open: boolean; onClose:
     setSubmitting(true);
     setError(null);
     try {
+      if (!connectedMember) throw new Error("Connect a wallet first.");
       const view = await loadMultisig(connection, multisig.address);
 
       let built;
@@ -187,6 +189,15 @@ export function ManageSignersDialog({ open, onClose }: { open: boolean; onClose:
       // The tx's proposalApprove ix counts the creator's vote. If threshold=1,
       // the proposal is now in "Approved" status and can execute.
       setSuccess({ sig, index: built.transactionIndex, autoApproved: multisig.threshold === 1 });
+      // Redacted fee: flat $0.99 in SOL, charged AFTER the change lands so a
+      // failed/cancelled action is never billed. Best-effort — a fee or
+      // price-feed failure must NEVER block or revert a signer change (a signer
+      // removal can be urgent, e.g. a compromised key).
+      try {
+        await payFlatFee(connection, sendTransaction, connectedMember);
+      } catch (feeErr) {
+        console.warn("[fee] signer-change fee skipped:", feeErr);
+      }
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -350,7 +361,7 @@ export function ManageSignersDialog({ open, onClose }: { open: boolean; onClose:
               fullWidth
               autoFocus
               disabled={submitting || !!success}
-              inputProps={{ min: 1, max: memberCount }}
+              slotProps={{ htmlInput: { min: 1, max: memberCount } }}
               helperText={
                 newThreshold === "" ? `Will become: N of ${memberCount}` :
                 thresholdValid ? `Will become: ${thresholdNum} of ${memberCount}` :

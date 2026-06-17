@@ -14,3 +14,6 @@ apps/web/.data/
 *.zip
 .turbo/
 private_vote/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

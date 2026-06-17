@@ -305,9 +305,9 @@ function VaultRow({ vault, onOpen, onBookmark, onRemove, onRename }: any) {
         <IconButton onClick={onBookmark} size="small">
           {vault.bookmarked ? <Bookmark fontSize="small" /> : <BookmarkBorder fontSize="small" />}
         </IconButton>
-        <IconButton onClick={onOpen} size="small" variant="contained" color="primary">
+        <Button onClick={onOpen} size="small" variant="contained" color="primary">
           Open
-        </IconButton>
+        </Button>
         <IconButton onClick={onRemove} size="small" color="error">
           <MoreVert fontSize="small" />
         </IconButton>

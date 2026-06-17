@@ -15,14 +15,14 @@ let cachedConn: Connection | null = null;
 export async function getAggregator(conn: Connection): Promise<PrivacyAggregator> {
   if (cached && cachedConn === conn) return cached;
 
-  // Dynamic import keeps @sqds/multisig and the Light client out of the server bundle.
+  // Dynamic import keeps @sqds/multisig out of the server bundle.
   const mod = await import("@redacted-usd/aggregator");
 
   cached = new mod.PrivacyAggregator({
     conn,
     backends: [
-      // Asset shielding → Light Protocol. Public fallback → Squads.
-      new mod.LightProtocolBackend(),
+      // Public vault routing via Squads. Asset shielding (Umbra) is handled
+      // separately in lib/umbra-shield.ts, not as an aggregator backend.
       new mod.SquadsPlainBackend(),
     ],
   });

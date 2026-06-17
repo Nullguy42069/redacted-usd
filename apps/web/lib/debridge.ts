@@ -184,7 +184,7 @@ export type QuoteParams = {
   srcChainTokenInAmount: bigint;   // base units
   dstChainId: number;
   dstChainTokenOut: string;
-  // Optional fee bps (we always use 0 — Redacted takes no bridge fee).
+  // No in-route bridge fee bps (kept 0); the Redacted fee is a separate SOL transfer (see lib/fees.ts).
   affiliateFeePercent?: number;
 };
 
@@ -271,7 +271,7 @@ export function inboundLink(opts: {
   fromChain?: DebridgeChain;
   toToken?: string;   // SPL mint, default USDC
 }): string {
-  const from = opts.fromChain ?? BRIDGE_DESTINATIONS[1]; // default Base
+  const from = opts.fromChain ?? BRIDGE_DESTINATIONS[1] ?? BRIDGE_DESTINATIONS[0]!; // default Base
   const toToken = opts.toToken ?? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
   const params = new URLSearchParams({
     inputChain: String(from.id),

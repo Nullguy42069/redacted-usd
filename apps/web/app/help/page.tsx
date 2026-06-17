@@ -17,7 +17,6 @@ const SECTIONS = [
   { id: "swap",           title: "Swap" },
   { id: "bridge",         title: "Bridge" },
   { id: "earn",           title: "Earn" },
-  { id: "perps",          title: "Perps" },
   { id: "privacy",        title: "Privacy" },
   { id: "extension",      title: "Browser extension" },
   { id: "settings",       title: "Settings" },
@@ -87,18 +86,15 @@ export default function HelpPage() {
         <Stack spacing={2.5}>
           <Section id="what-is" title="What is Redacted">
             <Para>
-              Redacted is a privacy-aware multisig vault on Solana. You keep self-custody. The site adds the surfaces you actually need: send, receive, swap, bridge, yield, automated perps trading — each with a one-tap Private/Public toggle.
+              Redacted is a privacy-aware multisig vault on Solana. You keep self-custody. The site adds the surfaces you actually need: send, receive, swap, bridge, and yield — each with a one-tap Private/Public toggle.
             </Para>
             <Para>
               Two design constraints shape everything:
             </Para>
             <Bullets>
               <li><b>Your keys, your call.</b> Redacted never custodies funds. Multisig vaults are Squads-style on Solana — every transaction is a proposal your signers vote on.</li>
-              <li><b>Privacy is a toggle.</b> Every transfer and swap has a Private/Public switch. <b>Private</b> routes through Light Protocol — Helius-aligned, cheap and fast via ZK compression, with full shielding rolling out alongside Helius&apos;s privacy layer. <b>Public</b> is a standard Squads vault.</li>
+              <li><b>Privacy is a toggle.</b> Every transfer has a Private/Public switch. <b>Private</b> routes through Umbra (Arcium shielded balances) — hiding amounts and balances and breaking the sender/graph linkage. <b>Public</b> is a standard Squads vault. Private shielding is live on the Assets page — it runs on a release-candidate SDK, so try a small amount first.</li>
             </Bullets>
-            <Para>
-              Redacted takes no fee on swaps, bridges, or routing. The only fee in the system is on Perps vault profits (10%, high-water mark) — and only when those vaults open for deposit.
-            </Para>
           </Section>
 
           <Section id="getting-started" title="Getting started">
@@ -159,7 +155,7 @@ export default function HelpPage() {
               <b>Send</b> opens a dialog: recipient address, amount, optional memo. In Wallet mode the tx fires immediately. In Vault mode a proposal is created — vote in the Transactions tab to execute.
             </Para>
             <Para>
-              The Send flow has the <b>Private/Public</b> toggle. <b>Private</b> routes through Light Protocol (Helius-aligned ZK compression today; full shielding rolling out with Helius). <b>Public</b> is a standard Squads transfer — fully visible on-chain.
+              The Assets page has the <b>Private/Public</b> toggle. <b>Private</b> shields via Umbra (Arcium) — hiding amounts/balances and breaking linkage. <b>Public</b> is a standard Squads transfer — fully visible on-chain. Private shielding is live (release-candidate SDK) — try a small amount first.
             </Para>
             <Para>
               <b>Receive</b> shows your active wallet or vault address with a QR code. Vault addresses are PDAs — fully receivable just like a regular wallet.
@@ -175,9 +171,6 @@ export default function HelpPage() {
             </Para>
             <Para>
               <b>Wallet mode:</b> click Swap → wallet signs → confirmed on chain. <b>Vault mode:</b> click Propose swap → the inner instructions are wrapped in a Squads proposal → vote and execute.
-            </Para>
-            <Para>
-              Redacted takes no fee. The only costs are standard Solana fees + the swap route's own DEX fees.
             </Para>
           </Section>
 
@@ -212,37 +205,18 @@ export default function HelpPage() {
             </Para>
           </Section>
 
-          <Section id="perps" title="Perps">
-            <Para>
-              Automated trading strategies running today on Hyperliquid as paper books. When Percolator launches on Solana, each book becomes a vault you can deposit into:
-            </Para>
-            <Bullets>
-              <li><b>Your share</b> is pro-rata of total deposits.</li>
-              <li><b>Daily P&amp;L</b> is distributed to the vault pro-rata.</li>
-              <li><b>Management fee:</b> 10% of new profits.</li>
-              <li><b>High-water mark:</b> fee only charged on new gains above your previous peak. If a vault goes down then back to even, you owe no fee.</li>
-              <li><b>Withdraw any time.</b> No lockup, no exit fee.</li>
-            </Bullets>
-            <Para>
-              The captain card on top is <b>Jarvis</b> — the strategy-of-strategies allocator that rotates capital across the books that are working in the current regime. Below Jarvis is a grid of individual books with live stats: deposits, lifetime return, last-1h delta, lifetime trade count + WR, today's net. Cards re-sort hourly so whichever book is doing best in the last hour bubbles to the top.
-            </Para>
-            <Para>
-              All numbers shown are phantom-fill audited. Books that traded synthetic equity tickers (xyz: prefix on HL) were audited for fill realism; the displayed returns are post-strip.
-            </Para>
-          </Section>
-
           <Section id="privacy" title="Privacy">
             <Para>
-              Privacy is one toggle, not a settings page. Every transfer and swap has a <b>Private / Public</b> switch:
+              Privacy is one toggle, not a settings page. Assets have a <b>Private / Public</b> switch:
             </Para>
             <KvList
               items={[
-                ["Private — Light Protocol", "Helius-aligned (the same vendor as our RPC), so it's cheap and fast via ZK compression. Today that means dramatically cheaper transactions; full shielding (hiding amounts and counterparties) rolls out with Helius's privacy layer. We bet on one protocol and do it well."],
+                ["Private — Umbra (Arcium)", "Shields a public balance into an encrypted token account: amounts and balances are hidden and the sender/graph linkage is broken (a 'private swap' is shield → fresh address → Jupiter → re-shield). We bet on one protocol and do it well. Live on a release-candidate SDK — try a small amount first."],
                 ["Public — Squads", "Standard Squads multisig. Everything on chain, no privacy overhead, fastest path. The safe default."],
               ]}
             />
             <Para>
-              That&apos;s the whole model: pick Private or Public per transaction. No per-activity backend matrix, no protocol to choose — Light handles privacy, Squads handles public.
+              That&apos;s the whole model: pick Private or Public per asset. No per-activity backend matrix, no protocol to choose — Umbra handles privacy, Squads handles public.
             </Para>
           </Section>
 

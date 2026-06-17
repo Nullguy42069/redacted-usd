@@ -4,7 +4,6 @@ export { HealthMonitor } from "./health/monitor";
 export { selectRoute } from "./router/select";
 export { scoreBackend } from "./router/scorer";
 export { REGISTRY, getMeta } from "./backends/registry";
-export { LightProtocolBackend } from "./backends/light";
 export { SquadsPlainBackend } from "./backends/squads-plain";
 
 export {

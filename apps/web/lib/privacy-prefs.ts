@@ -22,9 +22,9 @@ export type ActivityDef = {
 };
 
 // Defaults pinned to squads-plain (Public vault, no privacy) across the board.
-// Light Protocol is the privacy candidate for transfers/swaps; the public route
-// stays the safe default until Light's shield path is verified end-to-end.
-// Privacy is chosen per-transaction via the Private/Public toggle (Assets + Swap).
+// Umbra (Arcium shielded balances) is the privacy backend for transfers; the
+// public route stays the safe default until Umbra's shield/unshield path is
+// verified end-to-end. Privacy is chosen per-asset via the Private/Public toggle.
 export const ACTIVITIES: ActivityDef[] = [
   {
     key: "transfers",

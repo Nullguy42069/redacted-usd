@@ -8,7 +8,8 @@ const TAG = '__REDACTED_BRIDGE__';
 
 // React app -> extension: vault change announcements
 window.addEventListener('message', (ev) => {
-  if (ev.source !== window || !ev.data) return;
+  if (ev.source !== window || ev.origin !== window.location.origin) return;
+  if (!ev.data) return;
   const m = ev.data;
   if (m.source !== TAG) return;
   if (m.kind === 'vault-set') {

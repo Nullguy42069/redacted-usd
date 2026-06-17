@@ -5,7 +5,7 @@
 //   - getSwapInstructions(): returns the raw instructions + LUTs so they can
 //     be packaged inside a Squads vault transaction proposal.
 //
-// We never set platformFeeBps — Redacted takes no swap fee.
+// No in-route aggregator fee here; the Redacted fee is a separate SOL transfer (see lib/fees.ts).
 
 import {
   AddressLookupTableAccount,

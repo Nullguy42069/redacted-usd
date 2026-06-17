@@ -152,7 +152,7 @@ export default function APIPage() {
             {vaults.length === 0 && (
               <Typography color="text.secondary">No vaults saved yet.</Typography>
             )}
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
               {vaults.map((vault) => (
                 <Chip
                   key={vault.address}

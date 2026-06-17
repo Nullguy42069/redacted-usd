@@ -32,8 +32,21 @@ async function main() {
     console.error(`[check-csp] received: ${csp.slice(0, 300)}`);
     process.exit(1);
   }
-  if (lower.includes("frame-ancestors") && !lower.match(/frame-ancestors\s+['"]?none['"]?/)) {
-    console.error(`[check-csp] WARN: frame-ancestors is set but not 'none' — clickjacking surface remains.`);
+  // Hard fail on `unsafe-eval` (arbitrary string→code). `wasm-unsafe-eval` is the
+  // narrow WASM-compile grant the ZK prover needs and is explicitly allowed —
+  // strip those tokens before testing so they don't trip the check.
+  const withoutWasm = lower.replace(/'wasm-unsafe-eval'/g, "");
+  if (withoutWasm.includes("unsafe-eval")) {
+    console.error(`[check-csp] FAIL: CSP allows 'unsafe-eval' — arbitrary code-eval surface.`);
+    console.error(`[check-csp] received: ${csp.slice(0, 300)}`);
+    process.exit(1);
+  }
+  // frame-ancestors must be 'none' — anything else leaves a clickjacking surface
+  // on a signing UI. Hard fail (was a warning).
+  if (!lower.match(/frame-ancestors\s+['"]?none['"]?/)) {
+    console.error(`[check-csp] FAIL: frame-ancestors must be 'none' on a wallet/signing UI.`);
+    console.error(`[check-csp] received: ${csp.slice(0, 300)}`);
+    process.exit(1);
   }
   console.log(`[check-csp] OK — CSP present at ${url}`);
   console.log(`[check-csp] ${csp.slice(0, 200)}`);

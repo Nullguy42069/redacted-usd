@@ -10,7 +10,6 @@ import {
   CompareArrows,
   CallSplit,
   Savings,
-  ShowChart,
   ChevronLeft,
   ChevronRight,
   AccountTree,
@@ -32,7 +31,6 @@ const DEFI = [
   { label: "Swap", path: "/swap", icon: <CompareArrows /> },
   { label: "Bridge", path: "/bridge", icon: <CallSplit /> },
   { label: "Earn", path: "/earn", icon: <Savings /> },
-  { label: "Perps", path: "/perps", icon: <ShowChart /> },
 ] as const;
 
 function RedactedMark() {

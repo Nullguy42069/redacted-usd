@@ -58,7 +58,6 @@ export default function EarnPage() {
   );
 }
 
-// ─── Books list + automation teaser moved to app/perps/page.tsx ────────────
 function AssetCard({ asset, active }: { asset: AssetKey; active: EarnPlatform | null }) {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
@@ -142,7 +141,6 @@ function AssetCard({ asset, active }: { asset: AssetKey; active: EarnPlatform | 
           multisigPda: multisig.address,
           view,
           creator: publicKey,
-          // @ts-expect-error TransactionInstruction shape matches
           instructions: inner,
           memo: `Earn: deposit ${amount} ${asset} → ${active.name}`,
         });

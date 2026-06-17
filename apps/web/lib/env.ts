@@ -34,6 +34,16 @@ const ALLOWED_RPC_HOST_SUFFIXES = [
 // base58 charset + length cap.
 const SOLANA_PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
+// Exact allowlist for the Squads program-id override. A valid-base58 check is
+// NOT enough: repointing this to ANY other (attacker) program is a drain
+// primitive — every proposal/execute would CPI into the attacker's program.
+// Squads v4 uses the same program id on mainnet + devnet, so there is exactly
+// one legitimate value. (Devnet forks, if ever needed, get added here under
+// review — never via a free-form localStorage write.)
+const ALLOWED_SQUADS_PROGRAM_IDS = new Set<string>([
+  "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf", // Squads v4 (mainnet + devnet)
+]);
+
 function isAllowedRpcOverride(url: string | null): boolean {
   if (!url) return false;
   try {
@@ -49,7 +59,8 @@ function isAllowedRpcOverride(url: string | null): boolean {
 
 function isAllowedProgramIdOverride(value: string | null): boolean {
   if (!value) return false;
-  return SOLANA_PUBKEY_RE.test(value);
+  // Must be a well-formed pubkey AND one of the known-good Squads programs.
+  return SOLANA_PUBKEY_RE.test(value) && ALLOWED_SQUADS_PROGRAM_IDS.has(value);
 }
 
 // Override accepted only if it passes the validator for its key class.
@@ -82,7 +93,7 @@ export const RPC_URL = resolveValidated(
 
 export const HELIUS_API_KEY: string | null = (() => {
   const match = RPC_URL.match(/[?&]api-key=([^&]+)/i);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 })();
 
 export const DEFAULT_MULTISIG = process.env.NEXT_PUBLIC_DEFAULT_MULTISIG ?? "";

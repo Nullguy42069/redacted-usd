@@ -99,7 +99,7 @@ export default function InstallPage() {
         {/* Step 1 */}
         <Card sx={{ border: downloaded ? "1px solid" : "none", borderColor: downloaded ? "success.main" : "transparent" }}>
           <CardContent>
-            <Stack direction="row" alignItems="center" spacing={2}>
+            <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
               <Chip
                 label="1"
                 color={downloaded ? "success" : "primary"}
@@ -128,7 +128,7 @@ export default function InstallPage() {
         {/* Step 2 */}
         <Card>
           <CardContent>
-            <Stack direction="row" alignItems="flex-start" spacing={2}>
+            <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start" }}>
               <Chip label="2" color="primary" sx={{ fontWeight: 700, fontSize: 18, width: 36, height: 36 }} />
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h5" sx={{ mb: 1 }}>
@@ -147,7 +147,7 @@ export default function InstallPage() {
         {/* Step 3 */}
         <Card>
           <CardContent>
-            <Stack direction="row" alignItems="flex-start" spacing={2}>
+            <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start" }}>
               <Chip label="3" color="primary" sx={{ fontWeight: 700, fontSize: 18, width: 36, height: 36 }} />
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h5" sx={{ mb: 1 }}>
@@ -158,7 +158,7 @@ export default function InstallPage() {
                   Copy the URL below, paste it into a new tab&apos;s address bar, then drag the unzipped folder onto that page.
                 </Typography>
 
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 2 }}>
                   {/* Click anywhere on the URL to copy. We can't make it a real link —
                       Chrome blocks web pages from navigating to chrome://* URLs. */}
                   <Box

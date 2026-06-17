@@ -10,7 +10,9 @@
 const REDACTED = '__REDACTED_BRIDGE__';
 
 function send(kind, data) {
-  window.postMessage({ source: REDACTED, kind, ...data }, '*');
+  // Pin to this page's origin — never '*'. A cross-origin iframe must not be able
+  // to read vault-update / sign-ack messages meant for the page provider.
+  window.postMessage({ source: REDACTED, kind, ...data }, window.location.origin);
 }
 
 function pushVault(vault) {
@@ -30,7 +32,8 @@ chrome.runtime.onMessage.addListener((msg) => {
 
 // Forward sign-requests from the page provider to background
 window.addEventListener('message', (ev) => {
-  if (ev.source !== window || !ev.data || ev.data.source !== REDACTED) return;
+  if (ev.source !== window || ev.origin !== window.location.origin) return;
+  if (!ev.data || ev.data.source !== REDACTED) return;
   const m = ev.data;
   if (m.kind === 'sign-request') {
     chrome.runtime.sendMessage({

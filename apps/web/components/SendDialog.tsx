@@ -16,6 +16,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import type { RoutingDecision, VaultTransferIntent } from "@redacted-usd/aggregator";
 import { useMultisig } from "./MultisigContext";
 import { getAggregator } from "@/lib/aggregator";
+import { percentFeeLamports, getSolUsdPrice, feeTransferIx, payPercentFee } from "@/lib/fees";
 import { RoutingDisplay } from "./RoutingDisplay";
 import { solToLamports } from "@/lib/squads";
 import { policyForActivity, fallbackPolicy } from "@/lib/privacy-policy";
@@ -132,10 +133,14 @@ export function SendDialog({ open, onClose }: { open: boolean; onClose: () => vo
           toPubkey: recipientPk,
           lamports,
         });
+        // Redacted fee: 0.1% of the transfer value, capped at $0.99, paid in SOL
+        // and composed into the same transaction.
+        const solUsd = await getSolUsdPrice();
+        const feeLamports = percentFeeLamports((Number(lamports) / 1e9) * solUsd, solUsd);
         const msg = new TransactionMessage({
           payerKey: publicKey,
           recentBlockhash: blockhash,
-          instructions: [ix],
+          instructions: feeLamports > 0 ? [feeTransferIx(publicKey, feeLamports), ix] : [ix],
         }).compileToV0Message();
         const tx = new VersionedTransaction(msg);
         const sig = await sendTransaction(tx, connection);
@@ -167,6 +172,15 @@ export function SendDialog({ open, onClose }: { open: boolean; onClose: () => vo
         const { result } = exec;
         if (multisig) invalidateAfterTx(multisig.vault);
         setSig(result.signature);
+        // Redacted fee: 0.1% of the transfer value, capped at $0.99, in SOL —
+        // paired tx paid by the initiating member, charged AFTER the proposal
+        // lands so a failed/cancelled transfer is never billed. Best-effort.
+        try {
+          const feeSolUsd = await getSolUsdPrice();
+          await payPercentFee(connection, sendTransaction, publicKey, (Number(intent.amount) / 1e9) * feeSolUsd);
+        } catch (feeErr) {
+          console.warn("[fee] vault-transfer fee skipped:", feeErr);
+        }
         refresh();
       }
     } catch (e) {

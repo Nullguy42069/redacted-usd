@@ -211,7 +211,7 @@ export function SpendingLimitDialog({ open, onClose }: { open: boolean; onClose:
                 Add
               </Button>
             </Stack>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
               {members.map((a) => (
                 <Chip key={a} label={shortAddress(a, 6, 6)} onDelete={() => removeMember(a)} deleteIcon={<Close fontSize="small" />} />
               ))}
@@ -238,7 +238,7 @@ export function SpendingLimitDialog({ open, onClose }: { open: boolean; onClose:
                 Add
               </Button>
             </Stack>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
               {destinations.map((a) => (
                 <Chip key={a} label={shortAddress(a, 6, 6)} onDelete={() => removeDestination(a)} deleteIcon={<Close fontSize="small" />} />
               ))}

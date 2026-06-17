@@ -116,8 +116,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               },
               "& .MuiOutlinedInput-notchedOutline": { border: "none" },
             }}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ color: "text.secondary", mr: 1 }} />,
+            slotProps={{
+              input: {
+                startAdornment: <SearchIcon sx={{ color: "text.secondary", mr: 1 }} />,
+              },
             }}
             variant="outlined"
           />
@@ -151,8 +153,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                 <ListItemText
                   primary={item.label}
                   secondary={item.description}
-                  primaryTypographyProps={{ fontSize: "0.95rem" }}
-                  secondaryTypographyProps={{ fontSize: "0.75rem" }}
+                  slotProps={{
+                    primary: { sx: { fontSize: "0.95rem" } },
+                    secondary: { sx: { fontSize: "0.75rem" } },
+                  }}
                 />
               </ListItemButton>
             ))

@@ -154,7 +154,7 @@ export type QuantumClass =
 export type PrivacyDimension = "amount" | "balance" | "sender" | "receiver" | "graph" | "compute";
 
 export type BackendId =
-  | "light-compressed"
+  | "umbra" // Arcium-backed shielded balances (encrypted token accounts + stealth pool) — the real privacy path
   | "squads-plain"; // explicit "no privacy" route for cost-priority intents
 
 // Static, hand-curated capabilities. Updated weekly by scripts/weekly-privacy-scan.mjs.

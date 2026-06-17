@@ -182,56 +182,11 @@ function WalletDependentBrowser({ owner, isPersonal = false }: { owner: PublicKe
     }
   };
 
-  const getMultisigBookmarklet = () => {
-    const vault = connectedAddress;
-    // Reverse-engineered clean free equivalent of SquadsX injection (no $50/mo extension needed).
-    // - Registers "Redacted Multisig" so it appears in modern dApp Connect Wallet lists (Wallet Standard + legacy).
-    // - Handles VersionedTransaction + legacy Transaction when extracting instructions for propose.
-    // - Prefers vault from #redacted-vault=... marker if we appended it on open-from-our-app.
-    // - User drags to bookmarks once. On dApp tab: click bookmark -> then pick "Redacted Multisig" in dApp's list.
-    const code = `javascript:(function(){var v='${vault}';try{var h=location.hash||'';var m=h.match(/redacted-vault=([^&#]+)/);if(m&&m[1])v=decodeURIComponent(m[1]);}catch(e){}window._redactedVault=v;console.log('%c[Redacted] Multisig provider injected for vault '+v,'color:#7C3AED;font-weight:600');function extractIxs(tx){var ixs=[];try{if(tx&&tx.instructions&&tx.instructions.length){ixs=tx.instructions.map(function(ix){return{programId:ix.programId&&ix.programId.toBase58?ix.programId.toBase58():String(ix.programId),keys:(ix.keys||[]).map(function(k){return{pubkey:k.pubkey&&k.pubkey.toBase58?k.pubkey.toBase58():String(k.pubkey),isSigner:!!k.isSigner,isWritable:!!k.isWritable}}),data:Array.from(ix.data||[])}});}else if(tx&&tx.message&&tx.message.compiledInstructions){var msg=tx.message;var ak=msg.getAccountKeys?msg.getAccountKeys().staticAccountKeys||[]:[];var sgn=msg.header?msg.header.numRequiredSignatures:0;var writable=msg.header?msg.header.numReadonlySignedAccounts:0;ixs=msg.compiledInstructions.map(function(ci){var prog=ak[ci.programIdIndex];var keys=ci.accountKeyIndexes.map(function(idx,i){var isS=idx<sgn;var isW=!(idx>=ak.length-writable);return{pubkey:prog&&prog.toBase58?prog.toBase58():String(prog),isSigner:isS,isWritable:isW};});return{programId:prog&&prog.toBase58?prog.toBase58():String(prog),keys:keys,data:Array.from(ci.data||[]);}});}}catch(e){console.warn('[Redacted] ixs extract err',e);}return ixs;}var fake={name:'Redacted Multisig',url:'https://redacted-usd.com',icon:'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNCIgZmlsbD0iIzZEMjI4RiIvPjx0ZXh0IHg9IjEyIiB5PSIxNiIgZm9udC1zaXplPSI5IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5SPC90ZXh0Pjwvc3ZnPg==',publicKey:{toBase58:()=>v,toString:()=>v},isConnected:true,connect:async function(){this.publicKey={toBase58:()=>v,toString:()=>v};return{publicKey:this.publicKey};},disconnect:async function(){},signTransaction:async function(tx){try{var ixs=extractIxs(tx);if(window.opener){window.opener.postMessage({type:'redacted-propose',vault:v,instructions:ixs},'*');}try{new Notification('Redacted',{body:'Proposal sent to Redacted for approval.'});}catch(e){}return Promise.reject(new Error('Redacted: created proposal in your vault. Approve & execute in Redacted app.'));}catch(e){console.error(e);return Promise.reject(e);}},signAllTransactions:async function(txs){return Promise.all(txs.map(this.signTransaction.bind(this)));},signMessage:async function(m){return new Uint8Array(64);},on:function(){return this;},version:'1.0.0',accounts:[{address:v,publicKey:new Uint8Array(32),chains:['solana:mainnet'],features:['solana:signTransaction'],label:'Redacted Multisig'}],chains:['solana:mainnet'],features:{'standard:connect':{version:'1.0.0',connect:function(){return Promise.resolve({publicKey:{toBase58:()=>v}});}},'standard:events':{version:'1.0.0',on:function(){return function(){};}},'solana:signTransaction':{version:'1.0.0',signTransaction:function(tx){return fake.signTransaction(tx);}}},};if(!window.solana||true)window.solana=fake;if(!window.phantom)window.phantom=fake;window.redactedMultisig=fake;try{var nav=window.navigator;if(!nav.wallets)nav.wallets=[];var arr=nav.wallets;if(Array.isArray(arr)){arr.push({register:function(r){try{r(fake);}catch(e){}}});}var ev=new CustomEvent('wallet-standard:app-wallets',{detail:{wallets:[fake]}});window.dispatchEvent(ev);setTimeout(function(){try{window.dispatchEvent(new CustomEvent('wallet-standard:app-wallets',{detail:{wallets:[fake]}}));}catch(e){}},800);}catch(e){}console.log('%c[Redacted] Redacted Multisig ready in wallet list (pick it after connect modal opens). Vault: '+v,'color:#22D3EE');})();`;
-    return code;
-  };
-
-  const copyBookmarklet = () => {
-    const bm = getMultisigBookmarklet();
-    navigator.clipboard.writeText(bm).then(() => {
-      alert('Bookmarklet copied! Create a new bookmark with this as the URL (javascript:...). Then on external dApp pages: 1) focus the dApp tab 2) click the bookmark once 3) in dApp Connect Wallet list pick "Redacted Multisig". Vault will be connected (not your personal wallet).');
-    }).catch(() => {
-      const w = window.open('', '_blank');
-      if (w) {
-        w.document.write('<pre>' + bm + '</pre>');
-      }
-    });
-  };
-
-  const getMultisigUserscript = () => {
-    const vault = connectedAddress;
-    // One-time install via Tampermonkey / Violentmonkey gives near-SquadsX behavior for free.
-    // @run-at document-start means on supported dApp pages the provider is injected *before* dApp code runs.
-    // Click a dApp card from Redacted while in vault mode -> tab opens (with marker) -> "Redacted Multisig" is already in the wallet list (or auto-used).
-    // Re-generate + reinstall if you change your active vault often.
-    const matches = [
-      'https://jup.ag/*','https://*.jup.ag/*','https://orca.so/*','https://*.orca.so/*',
-      'https://drift.trade/*','https://*.drift.trade/*','https://raydium.io/*','https://*.raydium.io/*',
-      'https://meteora.ag/*','https://*.meteora.ag/*','https://kamino.finance/*','https://*.kamino.finance/*',
-      'https://marginfi.com/*','https://*.marginfi.com/*','https://save.finance/*','https://*.save.finance/*',
-      'https://marinade.finance/*','https://*.marinade.finance/*','https://sanctum.so/*','https://*.sanctum.so/*',
-      'https://jito.wtf/*','https://*.jito.wtf/*','https://lulo.fi/*','https://*.lulo.fi/*'
-    ].map(m => '// @match ' + m).join('\n');
-    const code = `// ==UserScript==\n// @name         Redacted Multisig (free SquadsX-like)\n// @namespace    redacted-usd\n// @version      1.1\n// @description  Injects your Redacted vault as a real wallet option on dApps. Click from Redacted apps page -> vault is force-available (no personal wallet default).\n// @author       Redacted USD\n${matches}\n// @run-at       document-start\n// @grant        none\n// ==/UserScript==\n\n(function(){\n  var v = '${vault}';\n  try { var h = location.hash || ''; var m = h.match(/redacted-vault=([^&#]+)/); if (m && m[1]) v = decodeURIComponent(m[1]); } catch(e){}\n  console.log('%c[Redacted Userscript] Injecting Redacted Multisig for vault '+v, 'color:#7C3AED');\n  function extractIxs(tx){ var ixs=[]; try{ if(tx&&tx.instructions&&tx.instructions.length){ ixs=tx.instructions.map(function(ix){return{programId:ix.programId&&ix.programId.toBase58?ix.programId.toBase58():String(ix.programId),keys:(ix.keys||[]).map(function(k){return{pubkey:k.pubkey&&k.pubkey.toBase58?k.pubkey.toBase58():String(k.pubkey),isSigner:!!k.isSigner,isWritable:!!k.isWritable}}),data:Array.from(ix.data||[])}});} else if(tx&&tx.message&&tx.message.compiledInstructions){ var msg=tx.message; var ak = (msg.getAccountKeys?msg.getAccountKeys().staticAccountKeys:[])||[]; var sgn=(msg.header&&msg.header.numRequiredSignatures)||0; var ro=(msg.header&&msg.header.numReadonlySignedAccounts)||0; ixs=msg.compiledInstructions.map(function(ci){ var prog=ak[ci.programIdIndex]; return {programId:prog&&prog.toBase58?prog.toBase58():String(prog), keys:ci.accountKeyIndexes.map(function(idx){ var isS=idx<sgn; var isW = idx < (ak.length-ro); return {pubkey:ak[idx]&&ak[idx].toBase58?ak[idx].toBase58():String(ak[idx]), isSigner:isS, isWritable:isW }; }), data:Array.from(ci.data||[]) }; }); } } catch(e){} return ixs; }\n  var fake = { name:'Redacted Multisig', url:'https://redacted-usd.com', icon:'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNCIgZmlsbD0iIzZEMjI4RiIvPjx0ZXh0IHg9IjEyIiB5PSIxNiIgZm9udC1zaXplPSI5IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5SPC90ZXh0Pjwvc3ZnPg==', publicKey:{toBase58:()=>v,toString:()=>v}, isConnected:true, connect:async function(){this.publicKey={toBase58:()=>v,toString:()=>v};return{publicKey:this.publicKey};}, disconnect:async function(){}, signTransaction:async function(tx){ try{ var ixs=extractIxs(tx); if(window.opener){window.opener.postMessage({type:'redacted-propose',vault:v,instructions:ixs},'*');} try{new Notification('Redacted',{body:'Tx proposed to your vault.'});}catch(e){} return Promise.reject(new Error('Redacted: Proposal created. Approve in Redacted USD app.')); }catch(e){return Promise.reject(e);} }, signAllTransactions:async function(txs){return Promise.all(txs.map(this.signTransaction.bind(this)));}, signMessage:async function(){return new Uint8Array(64);}, on:function(){return this;}, version:'1.0.0', accounts:[{address:v,publicKey:new Uint8Array(32),chains:['solana:mainnet'],features:['solana:signTransaction'],label:'Redacted Multisig'}], chains:['solana:mainnet'], features:{'standard:connect':{version:'1.0.0',connect:function(){return Promise.resolve({publicKey:{toBase58:()=>v}});}},'standard:events':{version:'1.0.0',on:function(){return function(){};}},'solana:signTransaction':{version:'1.0.0',signTransaction:function(tx){return fake.signTransaction(tx);}}} };\n  window.solana = fake; window.phantom = fake; window.redactedMultisig = fake;\n  try{ var nav = window.navigator; if(!nav.wallets) nav.wallets = []; if(Array.isArray(nav.wallets)) nav.wallets.push({register:function(r){try{r(fake);}catch(e){}}}); window.dispatchEvent(new CustomEvent('wallet-standard:app-wallets',{detail:{wallets:[fake]}})); setTimeout(function(){try{window.dispatchEvent(new CustomEvent('wallet-standard:app-wallets',{detail:{wallets:[fake]}}));}catch(e){}},600); }catch(e){}\n  // Try to win default connect for some dapps by hinting last used\n  try{ localStorage.setItem('connectedWallet','Redacted Multisig'); localStorage.setItem('wallet-adapter','redacted'); }catch(e){}\n})();`;
-    return code;
-  };
-
-  const copyUserscript = () => {
-    const us = getMultisigUserscript();
-    navigator.clipboard.writeText(us).then(() => {
-      alert('Userscript copied! 1. Install Tampermonkey or Violentmonkey extension (free). 2. Click the Tampermonkey icon -> Create new script. 3. Paste this, save. It will auto-inject "Redacted Multisig" on supported dApps at page start. Then: click any dApp card here while vault is active -> opened tab will have the vault force-loaded as a connectable wallet (pick it or it may auto). Re-copy if you switch vaults.');
-    }).catch(() => {
-      const w = window.open('', '_blank');
-      if (w) w.document.write('<pre style="white-space:pre-wrap">' + us.replace(/</g,'&lt;') + '</pre>');
-    });
-  };
+  // NOTE: the legacy bookmarklet/userscript generators were removed in the
+  // pre-open-source audit. They injected a fake wallet that posted proposals to
+  // window.opener with targetOrigin '*' — a cross-origin drain primitive that
+  // origin allow-listing alone could not close. The Redacted browser extension
+  // (extension/) is the supported, same-origin replacement.
 
   const handleSearchAdd = async () => {
     const term = searchTerm.trim();
@@ -304,10 +259,18 @@ function WalletDependentBrowser({ owner, isPersonal = false }: { owner: PublicKe
     // (modeled on Safe's AppCommunicator which checks iframeRef.current.contentWindow === event.source)
     const comm = setupSquadsIframeBridge({
       iframeRef,
-      allowedOrigins: ["*"], // for now broad (dApp origin varies); tighten per-app when we add manifest/origin from manifest
+      // Restrict to the loaded dApp's origin (the communicator also checks the
+      // message came from THIS iframe). The decode+confirm gate below is the real
+      // protection against a hostile embedded dApp.
+      allowedOrigins: (() => { try { return [new URL(currentUrl).origin]; } catch { return ["*"]; } })(),
       getCurrentVault: () => vaultPubkey,
       onProposeTransaction: async (instructions, vault) => {
         if (!connectedMember) throw new Error("No wallet connected");
+        // SECURITY: never auto-sign instructions from the embedded dApp — show
+        // the user the decoded program list and require explicit confirmation.
+        if (!confirmProposalReview(instructions, "the in-app dApp browser")) {
+          throw new Error("Proposal cancelled.");
+        }
         try {
           const view = await loadMultisig(connection, vaultPubkey);
           const { tx } = await buildProposeTransaction({
@@ -357,17 +320,51 @@ function WalletDependentBrowser({ owner, isPersonal = false }: { owner: PublicKe
     // For others, the iframe onLoad will handle probing
   }, [currentUrl, browserOpen]);
 
-  // Listener for bookmarklet/external dApp propose messages (free SquadsX alternative - no $50/mo needed)
+  // SECURITY (decode + confirm gate): the ONLY legitimate sender of a
+  // redacted-propose message is the Redacted extension's content script, which
+  // posts SAME-ORIGIN (the handler enforces event.origin === our origin). We
+  // still never auto-build+sign — we decode the program list and require explicit
+  // confirmation. Function declaration so it's hoisted for the bridge effect above.
+  function confirmProposalReview(
+    ixs: { programId: PublicKey; data: Buffer | number[] }[],
+    source: string,
+  ): boolean {
+    const lines = ixs.map((ix, i) => {
+      const pid = ix.programId.toBase58();
+      const d = ix.data as any;
+      let extra = "";
+      if (pid === "11111111111111111111111111111111" && Number(d[0]) === 2) {
+        let lamports = 0;
+        for (let k = 11; k >= 4; k--) lamports = lamports * 256 + Number(d[k]);
+        extra = ` — transfer ${(lamports / 1e9).toFixed(6)} SOL`;
+      }
+      return `  ${i + 1}. ${pid}${extra}`;
+    });
+    return window.confirm(
+      `A request from ${source} wants to create a proposal in YOUR vault with ${ixs.length} instruction(s):\n\n${lines.join("\n")}\n\nOnly approve if you initiated this action. Create the proposal?`,
+    );
+  }
+
+  // Redacted-extension propose channel (same-origin only).
   useEffect(() => {
     const handler = (event: MessageEvent) => {
-      if (event.data && event.data.type === 'redacted-propose') {
-        const { vault, instructions } = event.data;
-        if (vault !== connectedAddress) return;
-        if (!connectedMember) {
-          alert('Please connect your member wallet (the one that can propose) in the topbar to create proposals from external dApps.');
-          return;
-        }
-        const ixs = instructions.map((ix: any) => new TransactionInstruction({
+      // Hard origin gate: only accept messages posted from THIS page's origin
+      // (the extension's content-redacted.js relays with location.origin). This
+      // alone closes the old cross-origin window.opener proposal-injection vector.
+      if (event.origin !== window.location.origin) return;
+      if (event.source !== window) return;
+      if (!event.data || event.data.type !== "redacted-propose") return;
+      const { vault, instructions } = event.data;
+      // Only our currently-selected vault, and only a valid instruction array.
+      if (vault !== connectedAddress) return;
+      if (!Array.isArray(instructions) || instructions.length === 0) return;
+      if (!connectedMember) {
+        alert("Connect your member wallet (the one that can propose) to create proposals from external dApps.");
+        return;
+      }
+      let ixs: TransactionInstruction[];
+      try {
+        ixs = instructions.map((ix: any) => new TransactionInstruction({
           programId: new PublicKey(ix.programId),
           keys: ix.keys.map((k: any) => ({
             pubkey: new PublicKey(k.pubkey),
@@ -376,31 +373,35 @@ function WalletDependentBrowser({ owner, isPersonal = false }: { owner: PublicKe
           })),
           data: Buffer.from(ix.data),
         }));
-        (async () => {
-          try {
-            const view = await loadMultisig(connection, new PublicKey(vault));
-            const { tx } = await buildProposeTransaction({
-              conn: connection,
-              multisigPda: new PublicKey(vault),
-              view,
-              creator: connectedMember,
-              instructions: ixs,
-              memo: 'Via external dApp (bookmarklet)',
-            });
-            const sig = await sendTransaction(tx, connection);
-            await connection.confirmTransaction(sig, 'confirmed');
-            if (!isPersonal) invalidateAfterTx(owner);
-            alert(`Proposal created from external dApp! Tx: ${sig}. Check the Transactions tab.`);
-            setLastProposalSignature(sig);
-          } catch (e: any) {
-            alert('Failed to create proposal from external dApp: ' + (e.message || e));
-          }
-        })();
+      } catch {
+        alert("Rejected a malformed external proposal request.");
+        return;
       }
+      if (!confirmProposalReview(ixs, event.origin || "an external site")) return;
+      (async () => {
+        try {
+          const view = await loadMultisig(connection, new PublicKey(vault));
+          const { tx } = await buildProposeTransaction({
+            conn: connection,
+            multisigPda: new PublicKey(vault),
+            view,
+            creator: connectedMember,
+            instructions: ixs,
+            memo: "Via Redacted extension",
+          });
+          const sig = await sendTransaction(tx, connection);
+          await connection.confirmTransaction(sig, "confirmed");
+          if (!isPersonal) invalidateAfterTx(owner);
+          alert(`Proposal created! Tx: ${sig}. Review it in the Transactions tab.`);
+          setLastProposalSignature(sig);
+        } catch (e: any) {
+          alert("Failed to create proposal from external dApp: " + (e.message || e));
+        }
+      })();
     };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, [connectedAddress, connectedMember, connection, sendTransaction]);
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [connectedAddress, connectedMember, connection, sendTransaction, isPersonal, owner]);
 
   return (
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 1200, mx: 'auto' }}>
@@ -597,7 +598,7 @@ function WalletDependentBrowser({ owner, isPersonal = false }: { owner: PublicKe
               key={iframeKey}
               src={currentUrl}
               style={{ width: "100%", height: "100%", border: "none", background: "white", display: iframeError ? 'none' : 'block' }}
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"
+              sandbox="allow-scripts allow-popups allow-forms allow-storage-access-by-user-activation"
               allow="clipboard-write; clipboard-read"
               onLoad={() => {
                 setIsLoadingIframe(false);
@@ -670,26 +671,13 @@ function WalletDependentBrowser({ owner, isPersonal = false }: { owner: PublicKe
             <Button size="small" onClick={copyVaultAddressForSquadsX}>{copiedVault ? 'Copied!' : 'Copy'}</Button>
           </Box>
 
-          <Typography sx={{ fontWeight: 700, mb: 0.5, color: 'primary.main' }}>Recommended — install the Redacted extension once:</Typography>
+          <Typography sx={{ fontWeight: 700, mb: 0.5, color: 'primary.main' }}>Install the Redacted extension once:</Typography>
           <Typography sx={{ mb: 0.5, fontSize: 13 }}>
             One-time install. After that, "Redacted Multisig" appears in every dApp's connect-wallet list automatically. Find the install banner on the main Apps page.
           </Typography>
 
-          <Typography sx={{ fontWeight: 600, mb: 0.5, mt: 2 }}>Manual fallback (no install):</Typography>
-          <Typography sx={{ mb: 0.5, fontSize: 13 }}>
-            1. Drag the "Redacted Multisig" link (on the main Apps page) to your bookmarks bar.<br />
-            2. Switch to the dApp tab that just opened.<br />
-            3. Click the bookmark once while on the dApp page.<br />
-            4. In the dApp's "Connect Wallet" list select "Redacted Multisig". Vault address shows as connected.
-          </Typography>
-          <a
-            href={getMultisigBookmarklet()}
-            style={{ display:'inline-block', padding:'6px 10px', background:'linear-gradient(90deg,#7C3AED 0%,#22D3EE 100%)', color:'white', borderRadius:4, textDecoration:'none', fontSize:'13px', marginBottom:12 }}
-            onClick={(e)=>{ e.preventDefault(); const b=getMultisigBookmarklet(); navigator.clipboard.writeText(b); alert('Bookmarklet copied — create bookmark with it.'); }}
-          >Copy/Drag bookmarklet</a>
-
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: 12 }}>
-            After either method, dApp actions (swap, deposit, …) post a proposal here instead of signing with your personal key. Approve in the Transactions tab.
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: 2, fontSize: 12 }}>
+            Once installed, dApp actions (swap, deposit, …) post a proposal here instead of signing with your personal key. Approve in the Transactions tab.
           </Typography>
 
           <Stack direction="row" spacing={1}>

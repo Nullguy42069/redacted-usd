@@ -18,7 +18,8 @@ export type AssetRow = {
   name: string;
   decimals: number;
   logoURI?: string;
-  amount: number; // human-scaled
+  amount: number; // human-scaled (for display only — never for transfer math)
+  amountBaseUnits: string; // exact raw base units from chain (lossless; use this for shield/transfer)
   priceUsd: number | null;
   valueUsd: number | null;
   priceChange24h?: number | null; // percentage, e.g. -14.49 for -14.49%
@@ -32,27 +33,41 @@ export async function loadAssets(conn: Connection, vault: PublicKey): Promise<As
   ]);
 
   type ParsedTokenAccount = {
-    account: { data: { parsed: { info: { mint: string; tokenAmount: { uiAmountString: string; decimals: number } } } } };
+    account: { data: { parsed: { info: { mint: string; tokenAmount: { amount: string; uiAmountString: string; decimals: number } } } } };
   };
-  const tokens: { mint: string; amount: number; decimals: number }[] = [];
+  const tokens: { mint: string; amount: number; amountBaseUnits: string; decimals: number }[] = [];
   for (const acc of [...tokenAccountsLegacy.value, ...tokenAccounts2022.value] as unknown as ParsedTokenAccount[]) {
     const info = acc.account.data.parsed.info;
+    // `amount` is the exact on-chain base-unit string; uiAmountString is a lossy
+    // float we keep only for display. Use the raw string for any transfer math.
+    const raw = info.tokenAmount.amount ?? "0";
     const ui = Number(info.tokenAmount.uiAmountString ?? "0");
     if (ui > 0) {
       tokens.push({
         mint: info.mint,
         amount: ui,
+        amountBaseUnits: raw,
         decimals: info.tokenAmount.decimals,
       });
     }
   }
 
   const mints = [SOL_PSEUDO_MINT, ...tokens.map((t) => t.mint)];
-  const [prices, heliusMetas, ...jupiterMetas] = await Promise.all([
+  const [prices, ...jupiterMetas] = await Promise.all([
     fetchPrices(mints),
-    getHeliusTokenMetas(mints),
     ...mints.map((m) => getTokenInfo(m)),
   ]);
+
+  // Helius DAS (getAsset) is a paid-RPC call — use it ONLY as a fallback for
+  // mints Jupiter couldn't fully describe (missing name or logo), not for every
+  // asset on every load. Well-known tokens (the common case) never hit Helius.
+  const mintsNeedingHelius = mints.filter((m, i) => {
+    const j = jupiterMetas[i];
+    return !j || !j.name || j.name === "Unknown" || !j.logoURI;
+  });
+  const heliusMetas = mintsNeedingHelius.length
+    ? await getHeliusTokenMetas(mintsNeedingHelius)
+    : {};
 
   const rows: AssetRow[] = [];
 
@@ -73,6 +88,7 @@ export async function loadAssets(conn: Connection, vault: PublicKey): Promise<As
     decimals: 9,
     logoURI: solMeta.logoURI,
     amount: solAmount,
+    amountBaseUnits: solLamports.toString(),
     priceUsd: solPrice,
     valueUsd: solPrice != null ? solAmount * solPrice : null,
     priceChange24h: solPriceEntry?.priceChange24h ?? null,
@@ -102,6 +118,7 @@ export async function loadAssets(conn: Connection, vault: PublicKey): Promise<As
         decimals: t.decimals,
         logoURI,
         amount: t.amount,
+        amountBaseUnits: t.amountBaseUnits,
         priceUsd: price,
         valueUsd: price != null ? t.amount * price : null,
         priceChange24h: priceEntry?.priceChange24h ?? null,

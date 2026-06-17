@@ -21,6 +21,7 @@ import { PublicKey } from "@solana/web3.js";
 import type { Policy } from "@redacted-usd/aggregator";
 import { detectNetwork } from "@redacted-usd/aggregator";
 import { getAggregator } from "@/lib/aggregator";
+import { payFlatFee } from "@/lib/fees";
 import { useMultisig } from "./MultisigContext";
 import { addVault } from "@/lib/vault-store";
 import { invalidateAll } from "@/lib/rpc-cache";
@@ -29,8 +30,8 @@ import Link from "next/link";
 type Props = { open: boolean; onClose: () => void };
 
 // "Create vault" flow. The user picks members and threshold. Vaults are created
-// through the plain Squads backend; privacy (Light Protocol shielding) is a
-// per-transfer choice made later, not a vault-creation-time setting.
+// through the plain Squads backend; privacy (Umbra / Arcium shielding) is a
+// per-asset choice made later, not a vault-creation-time setting.
 export function CreateVaultDialog({ open, onClose }: Props) {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
@@ -60,6 +61,7 @@ export function CreateVaultDialog({ open, onClose }: Props) {
     const errors: { line: number; address: string; reason: string }[] = [];
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
+      if (!m) continue;
       // Catch common mistakes that aren't valid Solana addresses but might
       // pass new PublicKey if it's exactly the right base58 length.
       if (m.startsWith("0x")) {
@@ -103,7 +105,7 @@ export function CreateVaultDialog({ open, onClose }: Props) {
     !thresholdInvalid;
 
   // Vault creation always goes through the plain Squads backend. Privacy
-  // (Light Protocol shielding) is applied per-transfer later, not at vault
+  // (Umbra / Arcium shielding) is applied per-asset later, not at vault
   // creation time.
   const policy: Policy = useMemo(
     () => ({
@@ -174,6 +176,14 @@ export function CreateVaultDialog({ open, onClose }: Props) {
         // after refresh/navigation (it was only being set as the active context
         // before, but not persisted to the user's local vault list).
         addVault({ address: addr, bookmarked: true, readOnly: false });
+        // Redacted fee: flat $0.99 in SOL, charged AFTER the vault is confirmed
+        // created so a failed/cancelled creation is never billed. Best-effort —
+        // a fee/price failure must not break the just-created-vault flow.
+        try {
+          await payFlatFee(connection, sendTransaction, publicKey);
+        } catch (feeErr) {
+          console.warn("[fee] vault-creation fee skipped:", feeErr);
+        }
         // A new vault was created — clear ALL cached state so the discovery /
         // assets / proposal queries refetch fresh against the new account.
         invalidateAll();

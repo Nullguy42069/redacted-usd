@@ -58,6 +58,12 @@
           });
         }
       } else if (tx?.message?.compiledInstructions) {
+        // NOTE: this reads STATIC account keys only — it can't resolve Address
+        // Lookup Tables in the MAIN world without web3.js. For LUT-using txs the
+        // extracted keys are incomplete; the Redacted app re-decodes + LUT-resolves
+        // and the user reviews program IDs before the proposal is created
+        // (apps/page.tsx confirmProposalReview). Full LUT resolution here is a
+        // follow-up (serialize + forward raw, like the Uint8Array path below).
         const msg = tx.message;
         const ak = msg.getAccountKeys?.()?.staticAccountKeys || msg.staticAccountKeys || [];
         const sgn = msg.header?.numRequiredSignatures || 0;
@@ -93,7 +99,7 @@
         id,
         vault: activeVault,
         instructions: extractIxs(tx),
-      }, '*');
+      }, window.location.origin);
     });
   }
 
@@ -125,6 +131,12 @@
     chains: ['solana:mainnet'],
     get accounts() { return [account()]; },
     features: {
+      // NOTE (security follow-up): connect auto-returns the active vault account
+      // with no per-origin user approval. Impact is low — the vault address is a
+      // public on-chain pubkey, no funds move, and every actual transaction still
+      // routes through the Redacted app for explicit multisig approval (and the
+      // background only ever proposes into the user's own stored vault). A
+      // per-origin connect allow-list is the planned hardening here.
       'standard:connect': {
         version: '1.0.0',
         connect: async () => ({ accounts: [account()] }),
@@ -201,7 +213,7 @@
     get isConnected() { return !!activeVault; },
     connect: async () => {
       if (!activeVault) {
-        window.postMessage({ source: REDACTED, kind: 'open-redacted' }, '*');
+        window.postMessage({ source: REDACTED, kind: 'open-redacted' }, window.location.origin);
         throw new Error('Redacted: open the Redacted app and select a vault.');
       }
       return { publicKey: legacy.publicKey };
@@ -223,7 +235,10 @@
 
   // ---- Bridge messages from content-bridge.js ----
   window.addEventListener('message', (ev) => {
-    if (ev.source !== window || !ev.data || ev.data.source !== REDACTED) return;
+    // Same-window + same-origin only. ev.origin is the page origin for the
+    // content-bridge's pinned postMessage; reject anything else.
+    if (ev.source !== window || ev.origin !== window.location.origin) return;
+    if (!ev.data || ev.data.source !== REDACTED) return;
     const m = ev.data;
     if (m.kind === 'vault-update') {
       const prev = activeVault;
@@ -237,7 +252,7 @@
   });
 
   // Ask bridge for the current vault on load
-  window.postMessage({ source: REDACTED, kind: 'vault-request' }, '*');
+  window.postMessage({ source: REDACTED, kind: 'vault-request' }, window.location.origin);
 
   console.log('%c[Redacted Multisig] provider registered (Wallet Standard)', 'color:#7C3AED;font-weight:600');
 })();

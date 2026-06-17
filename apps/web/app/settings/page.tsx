@@ -220,7 +220,7 @@ function SetupTab({ onCopy }: { onCopy: (label: string, value: string) => void }
           <Box>
             <Typography sx={{ fontWeight: 600, mb: 0.5 }}>You are on Redacted v1</Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              v1 ships the multisig core. Redacted v2 adds the privacy layer (Light Protocol shielded balances and transfers) and will be a different product entirely.
+              v1 ships the multisig core. Redacted v2 adds the privacy layer (Umbra / Arcium shielded balances and transfers) and will be a different product entirely.
             </Typography>
           </Box>
         </Box>
@@ -820,7 +820,7 @@ function ModulesTab({ onCopy }: { onCopy: (label: string, value: string) => void
         >
           <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>None installed</Typography>
           <Typography variant="caption">
-            Recovery (timelocked owner-change) and Light Protocol shielded balances will appear here as separate program modules in v2.
+            Recovery (timelocked owner-change) and Umbra (Arcium) shielded balances will appear here as separate program modules in v2.
           </Typography>
         </Box>
       </SectionCard>

@@ -19,6 +19,8 @@ import {
 import { buildProposeTransaction, loadMultisig } from "@/lib/squads";
 import { getBackendIdFor, ACTIVITIES, backendsForActivity } from "@/lib/privacy-prefs";
 import { useEvmWallet } from "@/components/EvmWalletContext";
+import { payPercentFee, tokenUsdValue } from "@/lib/fees";
+import { guardBridge } from "@/lib/tx-guard";
 
 type Side = "pay" | "receive";
 
@@ -123,9 +125,9 @@ export default function BridgePage() {
     const oldSrc = { chain: srcChainId, token: srcToken };
     const oldDst = { chain: dstChainId, token: dstToken };
     setSrcChainId(oldDst.chain);
-    setSrcToken(getTokens(oldDst.chain).find((t) => t.symbol === oldDst.token.symbol) ?? getTokens(oldDst.chain)[0]);
+    setSrcToken(getTokens(oldDst.chain).find((t) => t.symbol === oldDst.token.symbol) ?? getTokens(oldDst.chain)[0] ?? oldDst.token);
     setDstChainId(oldSrc.chain);
-    setDstToken(getTokens(oldSrc.chain).find((t) => t.symbol === oldSrc.token.symbol) ?? getTokens(oldSrc.chain)[0]);
+    setDstToken(getTokens(oldSrc.chain).find((t) => t.symbol === oldSrc.token.symbol) ?? getTokens(oldSrc.chain)[0] ?? oldSrc.token);
     setQuote(null);
   };
 
@@ -147,28 +149,49 @@ export default function BridgePage() {
       });
       const tx = decodeSolanaTx(result);
       if (isPersonal) {
+        // Don't blind-sign deBridge's tx: enforce the user-only signer invariant
+        // (LUT-resolved) before it reaches the wallet.
+        await guardBridge(connection, tx, publicKey.toBase58());
         const s = await sendTransaction(tx, connection);
         await connection.confirmTransaction(s, "confirmed");
         setSig(s);
       } else {
         const msg = tx.message;
-        const ak = (msg as any).getAccountKeys?.()?.staticAccountKeys || (msg as any).staticAccountKeys || [];
-        const inner = msg.compiledInstructions.map((ci) => ({
-          programId: ak[ci.programIdIndex],
-          keys: ci.accountKeyIndexes.map((idx: number) => {
-            const sgn = msg.header.numRequiredSignatures;
-            const ro = msg.header.numReadonlySignedAccounts;
-            return { pubkey: ak[idx], isSigner: idx < sgn, isWritable: idx < (ak.length - ro) };
+        // Resolve any Address Lookup Tables so LUT-loaded accounts (indexes past
+        // the static keys) reconstruct correctly — otherwise the rebuilt proposal
+        // instructions get undefined pubkeys / wrong writability. Use the
+        // message's own isAccountWritable/isAccountSigner (LUT-aware) rather than
+        // a header heuristic.
+        const lookups = msg.addressTableLookups ?? [];
+        const luts = await Promise.all(
+          lookups.map(async (l) => {
+            const res = await connection.getAddressLookupTable(l.accountKey);
+            if (!res.value) {
+              throw new Error(`Bridge tx references a lookup table that couldn't be loaded (${l.accountKey.toBase58()}).`);
+            }
+            return res.value;
           }),
-          data: Buffer.from(ci.data),
-        }));
+        );
+        const keys = msg.getAccountKeys({ addressLookupTableAccounts: luts });
+        const inner = msg.compiledInstructions.map((ci) => {
+          const programId = keys.get(ci.programIdIndex);
+          if (!programId) throw new Error("Bridge tx has an unresolvable program account.");
+          return {
+            programId,
+            keys: ci.accountKeyIndexes.map((idx: number) => {
+              const pubkey = keys.get(idx);
+              if (!pubkey) throw new Error(`Bridge tx references an unresolvable account index ${idx}.`);
+              return { pubkey, isSigner: msg.isAccountSigner(idx), isWritable: msg.isAccountWritable(idx) };
+            }),
+            data: Buffer.from(ci.data),
+          };
+        });
         const view = await loadMultisig(connection, multisig!.address);
         const built = await buildProposeTransaction({
           conn: connection,
           multisigPda: multisig!.address,
           view,
           creator: publicKey,
-          // @ts-expect-error TransactionInstruction shape matches
           instructions: inner,
           memo: `Bridge ${amount} ${srcToken.symbol} → ${dstToken.symbol} on ${dstChain.shortName}`,
         });
@@ -176,6 +199,17 @@ export default function BridgePage() {
         await connection.confirmTransaction(s, "confirmed");
         if (multisig) invalidateAfterTx(multisig.vault);
         setSig(s); refresh();
+      }
+      // Redacted fee: 0.1% of the bridged value, capped at $0.99, in SOL (paid by
+      // the connected Solana wallet). Charged AFTER the bridge action lands so a
+      // failed/cancelled bridge is never billed. Best-effort — a fee/price
+      // failure must not surface as a bridge error. EVM-sourced inbound bridges
+      // have no SOL outflow here, so this applies to Solana-source only.
+      try {
+        const bridgedUsd = await tokenUsdValue(srcToken.address, Number(baseUnits), srcToken.decimals);
+        await payPercentFee(connection, sendTransaction, publicKey, bridgedUsd);
+      } catch (feeErr) {
+        console.warn("[fee] bridge fee skipped:", feeErr);
       }
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : String(e));
@@ -379,7 +413,7 @@ export default function BridgePage() {
           >
             <InfoOutlined sx={{ color: "secondary.main", fontSize: 14, flexShrink: 0, mt: 0.25 }} />
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
-              <b>Redacted takes no bridge fee.</b> Once on Solana, your funds inherit the privacy backend you picked for "Token transfers".
+              Once on Solana, your funds inherit the privacy backend you picked for "Token transfers".
               {!isSvmSource && " EVM source chains route through an external wallet today — native multi-chain signing ships soon."}
             </Typography>
           </Box>
