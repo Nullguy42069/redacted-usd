@@ -451,13 +451,23 @@ function WalletDependentBrowser({ owner, isPersonal = false }: { owner: PublicKe
 
       {/* Subtle indicator once the extension is active (multisig mode only). */}
       {!isPersonal && extensionInstalled && (
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <Chip
             size="small"
             label="Redacted extension active — dApps will see your vault as 'Redacted Multisig'"
             sx={{ bgcolor: 'rgba(34,211,238,0.12)', color: '#22D3EE', borderColor: '#22D3EE' }}
             variant="outlined"
           />
+          <Button size="small" variant="text" href="/install">Setup guide & demo</Button>
+        </Box>
+      )}
+
+      {/* Keep the extension setup + demo video reachable in every state (personal
+          mode, or once the extension is already installed) — the full banner above
+          only shows in vault mode when the extension isn't detected. */}
+      {isPersonal && (
+        <Box sx={{ mb: 2 }}>
+          <Button size="small" variant="text" href="/install">Install the Redacted extension — setup guide & demo</Button>
         </Box>
       )}
 
