@@ -1,8 +1,10 @@
 "use client";
 import {
   Box, Card, CardContent, Typography, Alert, TextField, Button, MenuItem,
-  Stack, IconButton, Chip, CircularProgress, Link as MuiLink, Divider,
+  Stack, IconButton, Chip, CircularProgress, Link as MuiLink, Divider, Avatar, InputAdornment,
 } from "@mui/material";
+import { Search as SearchIcon } from "@mui/icons-material";
+import { loadAssets, type AssetRow } from "@/lib/assets";
 import { SwapVert, Settings, InfoOutlined } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
@@ -52,6 +54,17 @@ export default function SwapPage() {
   // when a live shield backend exists.
   const [swapPrivate, setSwapPrivate] = useState(false);
   const [shieldMsg, setShieldMsg] = useState<string | null>(null);
+  // The connected wallet/vault's actual token holdings, so the picker shows what
+  // you can trade (not just presets). Loaded lazily; failures fall back to [].
+  const [walletTokens, setWalletTokens] = useState<AssetRow[] | null>(null);
+  useEffect(() => {
+    if (!activeOwner) { setWalletTokens(null); return; }
+    let cancelled = false;
+    loadAssets(connection, activeOwner)
+      .then((rows) => { if (!cancelled) setWalletTokens(rows); })
+      .catch(() => { if (!cancelled) setWalletTokens([]); });
+    return () => { cancelled = true; };
+  }, [connection, activeOwner]);
 
   // The Private switch shields the swap OUTPUT via Umbra — only possible in
   // personal mode (Umbra needs the wallet as signer) with a live shield backend,
@@ -274,7 +287,7 @@ export default function SwapPage() {
                 variant="standard"
                 slotProps={{ input: { disableUnderline: true, style: { fontSize: 22, fontWeight: 600 } } }}
               />
-              <TokenPicker token={inToken} onChange={setInToken} />
+              <TokenPicker token={inToken} onChange={setInToken} walletTokens={walletTokens} />
             </Stack>
           </Box>
 
@@ -299,7 +312,7 @@ export default function SwapPage() {
                   {outDisplay || "0.0"}
                 </Typography>
               </Box>
-              <TokenPicker token={outToken} onChange={setOutToken} />
+              <TokenPicker token={outToken} onChange={setOutToken} walletTokens={walletTokens} />
             </Stack>
           </Box>
 
@@ -408,91 +421,104 @@ export default function SwapPage() {
   );
 }
 
-function TokenPicker({ token, onChange }: { token: Token; onChange: (t: Token) => void }) {
+function TokenPicker({
+  token, onChange, walletTokens,
+}: {
+  token: Token;
+  onChange: (t: Token) => void;
+  walletTokens: AssetRow[] | null;
+}) {
   const [open, setOpen] = useState(false);
-  const [custom, setCustom] = useState("");
-  const [customDec, setCustomDec] = useState("6");
+  const [query, setQuery] = useState("");
+
+  // Your actual holdings (non-zero) first, then any presets you don't already
+  // hold — so the list is "what you can trade" + the common targets.
+  const held: { token: Token; amount: number; logoURI?: string }[] = (walletTokens ?? [])
+    .filter((r) => r.amount > 0)
+    .map((r) => ({
+      token: { symbol: r.symbol, name: r.name, mint: r.mint, decimals: r.decimals },
+      amount: r.amount,
+      logoURI: r.logoURI,
+    }));
+  const heldMints = new Set(held.map((h) => h.token.mint));
+  const presets = SWAP_TOKEN_PRESETS.filter((p) => !heldMints.has(p.mint)).map((p) => ({ token: p, amount: 0, logoURI: undefined as string | undefined }));
+
+  const q = query.trim().toLowerCase();
+  const matches = (e: { token: Token }) =>
+    !q || e.token.symbol.toLowerCase().includes(q) || e.token.name.toLowerCase().includes(q) || e.token.mint.toLowerCase().includes(q);
+  const heldFiltered = held.filter(matches);
+  const presetsFiltered = presets.filter(matches);
+
+  // If the query looks like a mint address with no list match, offer it directly.
+  let pastedMint: Token | null = null;
+  if (q && heldFiltered.length === 0 && presetsFiltered.length === 0) {
+    try { pastedMint = { symbol: query.trim().slice(0, 6), name: "Custom token", mint: new PublicKey(query.trim()).toBase58(), decimals: 6 }; } catch { pastedMint = null; }
+  }
+
+  const Row = (e: { token: Token; amount: number; logoURI?: string }) => (
+    <MenuItem key={e.token.mint} onClick={() => { onChange(e.token); setOpen(false); setQuery(""); }} selected={e.token.mint === token.mint}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%" }}>
+        <Avatar src={e.logoURI} sx={{ width: 26, height: 26 }}>{e.token.symbol[0]}</Avatar>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography sx={{ fontWeight: 600 }}>{e.token.symbol}</Typography>
+          <Typography variant="caption" sx={{ color: "text.secondary" }} noWrap>{e.token.name}</Typography>
+        </Box>
+        {e.amount > 0 && (
+          <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 600 }}>
+            {e.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+          </Typography>
+        )}
+      </Box>
+    </MenuItem>
+  );
+
   return (
     <>
-      <Button
-        variant="outlined"
-        size="small"
-        onClick={() => setOpen(true)}
-        sx={{ flexShrink: 0, minWidth: 100 }}
-      >
+      <Button variant="outlined" size="small" onClick={() => setOpen(true)} sx={{ flexShrink: 0, minWidth: 100 }}>
         {token.symbol}
       </Button>
       {open && (
         <Box
-          onClick={() => setOpen(false)}
-          sx={{
-            position: "fixed", inset: 0, bgcolor: "rgba(0,0,0,0.6)", zIndex: 1300,
-            display: "flex", alignItems: "center", justifyContent: "center", p: 2,
-          }}
+          onClick={() => { setOpen(false); setQuery(""); }}
+          sx={{ position: "fixed", inset: 0, bgcolor: "rgba(0,0,0,0.6)", zIndex: 1300, display: "flex", alignItems: "center", justifyContent: "center", p: 2 }}
         >
-          <Card onClick={(e) => e.stopPropagation()} sx={{ maxWidth: 380, width: "100%" }}>
+          <Card onClick={(e) => e.stopPropagation()} sx={{ maxWidth: 400, width: "100%" }}>
             <CardContent>
-              <Typography variant="h3" sx={{ mb: 2 }}>Pick a token</Typography>
-              <Stack spacing={0.5} sx={{ mb: 2 }}>
-                {SWAP_TOKEN_PRESETS.map((t) => (
-                  <MenuItem
-                    key={t.mint}
-                    onClick={() => { onChange(t); setOpen(false); }}
-                    selected={t.mint === token.mint}
-                  >
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-                      <Box>
-                        <Typography sx={{ fontWeight: 600 }}>{t.symbol}</Typography>
-                        <Typography variant="caption" sx={{ color: "text.secondary" }}>{t.name}</Typography>
-                      </Box>
-                      <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.disabled" }}>
-                        {t.mint.slice(0, 4)}…{t.mint.slice(-4)}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Stack>
-              <Divider sx={{ my: 1 }} />
-              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 1 }}>
-                Or paste a custom mint
-              </Typography>
-              <Stack direction="row" spacing={1}>
-                <TextField
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  placeholder="Mint address"
-                  size="small"
-                  fullWidth
-                />
-                <TextField
-                  value={customDec}
-                  onChange={(e) => setCustomDec(e.target.value)}
-                  placeholder="Decimals"
-                  size="small"
-                  sx={{ width: 90 }}
-                  type="number"
-                />
-              </Stack>
-              <Button
+              <Typography variant="h3" sx={{ mb: 1.5 }}>Pick a token</Typography>
+              <TextField
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name or paste a mint address"
+                size="small"
                 fullWidth
-                variant="contained"
-                sx={{ mt: 1.5 }}
-                disabled={!custom.trim()}
-                onClick={() => {
-                  try {
-                    new PublicKey(custom.trim());
-                    onChange({
-                      symbol: custom.trim().slice(0, 4),
-                      name: "Custom",
-                      mint: custom.trim(),
-                      decimals: Math.max(0, parseInt(customDec, 10) || 0),
-                    });
-                    setOpen(false);
-                  } catch {}
-                }}
-              >
-                Use custom token
-              </Button>
+                autoFocus
+                slotProps={{ input: { startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>) } }}
+                sx={{ mb: 1.5 }}
+              />
+              <Box sx={{ maxHeight: 340, overflowY: "auto" }}>
+                {!walletTokens && (
+                  <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}><CircularProgress size={20} /></Box>
+                )}
+                {heldFiltered.length > 0 && (
+                  <>
+                    <Typography variant="caption" sx={{ color: "text.secondary", px: 1 }}>Your tokens</Typography>
+                    {heldFiltered.map(Row)}
+                  </>
+                )}
+                {presetsFiltered.length > 0 && (
+                  <>
+                    {heldFiltered.length > 0 && <Divider sx={{ my: 0.5 }} />}
+                    <Typography variant="caption" sx={{ color: "text.secondary", px: 1 }}>Common tokens</Typography>
+                    {presetsFiltered.map(Row)}
+                  </>
+                )}
+                {pastedMint && Row({ token: pastedMint, amount: 0 })}
+                {walletTokens && heldFiltered.length === 0 && presetsFiltered.length === 0 && !pastedMint && (
+                  <Typography variant="caption" sx={{ color: "text.disabled", display: "block", textAlign: "center", py: 2 }}>
+                    No matching token. Paste a valid mint address to use it.
+                  </Typography>
+                )}
+              </Box>
             </CardContent>
           </Card>
         </Box>
