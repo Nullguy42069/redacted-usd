@@ -21,7 +21,10 @@ import {
 import { buildProposeTransaction, loadMultisig } from "@/lib/squads";
 import { payPercentFee, percentFeeLamports, getSolUsdPrice, feeTransferIx, tokenUsdValue } from "@/lib/fees";
 import { guardJupiterSwap } from "@/lib/tx-guard";
-import { getBackendIdFor, ACTIVITIES, backendsForActivity } from "@/lib/privacy-prefs";
+import PrivacyModeControl, { PRIVATE_BACKEND_ID } from "@/components/PrivacyModeControl";
+import { hasLiveShield } from "@/lib/privacy-protocols";
+
+const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
 type Token = { symbol: string; name: string; mint: string; decimals: number };
 
@@ -44,11 +47,17 @@ export default function SwapPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sig, setSig] = useState<string | null>(null);
+  // "Private" = after the swap, shield the output token into the Umbra encrypted
+  // balance. Only meaningful in personal mode (Umbra signs with the wallet) and
+  // when a live shield backend exists.
+  const [swapPrivate, setSwapPrivate] = useState(false);
+  const [shieldMsg, setShieldMsg] = useState<string | null>(null);
 
-  const vaultKey = activeOwner ? activeOwner.toBase58() : "__default__";
-  const privacyPickId = getBackendIdFor(vaultKey, "swap");
-  const swapActivity = ACTIVITIES.find((a) => a.key === "swap")!;
-  const privacyPick = backendsForActivity(swapActivity).find((b) => b.id === privacyPickId);
+  // The Private switch shields the swap OUTPUT via Umbra — only possible in
+  // personal mode (Umbra needs the wallet as signer) with a live shield backend,
+  // and not when the output is native SOL (Umbra shields SPL/Token-2022).
+  const outputShieldable = outToken.mint !== WSOL_MINT;
+  const swapShieldAvailable = isPersonal && hasLiveShield() && outputShieldable;
 
   const baseUnits = useMemo(
     () => toBaseUnits(inputAmount, inToken.decimals),
@@ -96,6 +105,7 @@ export default function SwapPage() {
     setSubmitting(true);
     setError(null);
     setSig(null);
+    setShieldMsg(null);
     try {
       const tx = await getSwapTransaction(quote, publicKey.toBase58());
       // Don't blind-sign the provider's tx: enforce user-only signer + Jupiter
@@ -112,6 +122,27 @@ export default function SwapPage() {
         await payPercentFee(connection, sendTransaction, publicKey, inUsd);
       } catch (feeErr) {
         console.warn("[fee] swap fee skipped:", feeErr);
+      }
+      // Private swap: shield the OUTPUT into the Umbra encrypted balance. We read
+      // the actual on-chain output-token balance (exact base units, no slippage
+      // guesswork) and shield that. Best-effort — a shield failure never undoes
+      // the (already-confirmed) swap; the tokens just stay public.
+      if (swapPrivate && swapShieldAvailable) {
+        try {
+          const accs = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(outToken.mint) });
+          const raw = accs.value.reduce(
+            (s, a) => s + BigInt(a.account.data.parsed.info.tokenAmount.amount ?? "0"),
+            0n,
+          );
+          if (raw > 0n) {
+            const { umbraShield } = await import("@/lib/umbra-shield");
+            await umbraShield({ ownerBase58: publicKey.toBase58(), mintBase58: outToken.mint, amountBaseUnits: raw });
+            setShieldMsg(`Shielded your ${outToken.symbol} into your Umbra encrypted balance.`);
+            invalidateAfterTx(publicKey);
+          }
+        } catch (shErr) {
+          setShieldMsg(`Swap succeeded, but shielding failed: ${shErr instanceof Error ? shErr.message : String(shErr)}. Your ${outToken.symbol} is in your public balance — shield it from the Assets tab.`);
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -273,9 +304,24 @@ export default function SwapPage() {
           </Box>
 
           <Stack spacing={1} sx={{ mb: 2 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "text.secondary" }}>Privacy backend (dApp activity)</Typography>
-              <Chip size="small" label={privacyPick?.displayName ?? privacyPickId} variant="outlined" />
+            <Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>Private — shield output via Umbra</Typography>
+                <PrivacyModeControl
+                  value={swapPrivate ? PRIVATE_BACKEND_ID : null}
+                  disabled={!swapShieldAvailable}
+                  onChange={(id) => setSwapPrivate(id != null)}
+                />
+              </Box>
+              {!swapShieldAvailable && (
+                <Typography variant="caption" sx={{ color: "text.disabled", fontSize: 11, display: "block", mt: 0.25 }}>
+                  {!isPersonal
+                    ? "Switch to Wallet mode to shield swap output — Umbra signs with your wallet, a vault PDA can't."
+                    : !outputShieldable
+                      ? "Native SOL output can't be shielded — choose an SPL output token."
+                      : "Shielding is unavailable right now."}
+                </Typography>
+              )}
             </Box>
             {quote && (
               <>
@@ -320,6 +366,11 @@ export default function SwapPage() {
                 view on Solscan
               </MuiLink>
               {!isPersonal && ". Vote from the Transactions tab to execute the swap."}
+            </Alert>
+          )}
+          {shieldMsg && (
+            <Alert severity={shieldMsg.startsWith("Shielded") ? "success" : "warning"} sx={{ mb: 2 }}>
+              {shieldMsg}
             </Alert>
           )}
 

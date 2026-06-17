@@ -1,7 +1,7 @@
 "use client";
 import {
   Box, Card, CardContent, Typography, Alert, TextField, Button,
-  Stack, Chip, CircularProgress, Link as MuiLink, IconButton, InputBase,
+  Stack, CircularProgress, Link as MuiLink, IconButton, InputBase,
   Dialog, DialogContent,
 } from "@mui/material";
 import { SwapVert, KeyboardArrowDown, Search, Close, OpenInNew, InfoOutlined } from "@mui/icons-material";
@@ -17,7 +17,7 @@ import {
   type DebridgeQuote, type DebridgeChain, type TokenPreset,
 } from "@/lib/debridge";
 import { buildProposeTransaction, loadMultisig } from "@/lib/squads";
-import { getBackendIdFor, ACTIVITIES, backendsForActivity } from "@/lib/privacy-prefs";
+import PrivacyModeControl from "@/components/PrivacyModeControl";
 import { useEvmWallet } from "@/components/EvmWalletContext";
 import { payPercentFee, tokenUsdValue } from "@/lib/fees";
 import { guardBridge } from "@/lib/tx-guard";
@@ -68,10 +68,6 @@ export default function BridgePage() {
   }, [isSvmSource, isPersonal]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Privacy chip — same activity pick as Send (Token transfers)
-  const vaultKey = activeOwner ? activeOwner.toBase58() : "__default__";
-  const privacyPickId = getBackendIdFor(vaultKey, "transfers");
-  const transfersActivity = ACTIVITIES.find((a) => a.key === "transfers")!;
-  const privacyPick = backendsForActivity(transfersActivity).find((b) => b.id === privacyPickId);
 
   // Cross-VM bridges (SVM ↔ EVM) always need a destination address — the
   // user's source-chain wallet isn't usable on the other VM. Same-VM bridges
@@ -260,16 +256,20 @@ export default function BridgePage() {
 
           {/* Meta row */}
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 2 }}>
-            <Chip
-              size="small"
-              label={`Privacy: ${privacyPick?.displayName.split(" ")[0] ?? privacyPickId}`}
-              variant="outlined"
-              sx={{ fontSize: 11 }}
-            />
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>Private</Typography>
+              {/* Shown for parity with Swap/Assets, but always disabled: a bridge
+                  moves funds to another chain/recipient, so there is nothing to
+                  shield inline. Shield on the Assets tab once funds arrive on Solana. */}
+              <PrivacyModeControl value={null} disabled onChange={() => {}} />
+            </Box>
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
               ETA: {quote?.order?.approximateFulfillmentDelay ? `~${Math.round(quote.order.approximateFulfillmentDelay)}s` : "—"}
             </Typography>
           </Box>
+          <Typography variant="caption" sx={{ color: "text.disabled", fontSize: 11, display: "block", mt: 0.5 }}>
+            Bridges can&apos;t be shielded inline — once funds arrive on Solana, shield them on the Assets tab.
+          </Typography>
 
           {/* Recipient toggle */}
           <Box sx={{ mt: 2 }}>
@@ -413,7 +413,7 @@ export default function BridgePage() {
           >
             <InfoOutlined sx={{ color: "secondary.main", fontSize: 14, flexShrink: 0, mt: 0.25 }} />
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
-              Once on Solana, your funds inherit the privacy backend you picked for "Token transfers".
+              Once your funds arrive on Solana, you can shield them on the Assets tab (Umbra) to make the balance private.
               {!isSvmSource && " EVM source chains route through an external wallet today — native multi-chain signing ships soon."}
             </Typography>
           </Box>
