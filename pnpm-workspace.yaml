@@ -1,6 +1,20 @@
 packages:
   - apps/*
   - packages/*
+
+# Security / hygiene overrides. NOTE: pnpm 11+ reads these from HERE, not from
+# the `pnpm` field in package.json (that field is now ignored) — this is the
+# authoritative location. Only satisfiable pins are listed:
+#   protobufjs ^7.5.5  — keep on the patched 7.x line (collapses a stray 7.4.0)
+#   uuid ^11.1.1       — single maintained line
+#   bn.js (5.x) ^5.2.3 — maskn(0) DoS fix; only the 5.x line (4.x consumers untouched)
+# NOT pinnable (upstream latest already; no fixed release exists):
+#   elliptic 6.6.1 (no 6.6.2 published), bigint-buffer 1.1.5 (unmaintained, no 1.1.6).
+overrides:
+  protobufjs: '^7.5.5'
+  uuid: '^11.1.1'
+  'bn.js@>=5.0.0': '^5.2.3'
+
 allowBuilds:
   '@stellar/stellar-sdk': set this to true or false
   bigint-buffer: true

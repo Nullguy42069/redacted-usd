@@ -18,11 +18,10 @@
   "engines": {
     "node": ">=20"
   },
+  "_comment_pnpm": "pnpm 11+ ignores this field — the authoritative overrides live in pnpm-workspace.yaml. Kept here only as a fallback for older pnpm.",
   "pnpm": {
     "overrides": {
       "protobufjs": "^7.5.5",
-      "bigint-buffer": "^1.1.6",
-      "elliptic": "^6.6.2",
       "uuid": "^11.1.1"
     }
   }
